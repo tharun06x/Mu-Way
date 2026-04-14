@@ -1,0 +1,21 @@
+{
+  "metrics": {
+    "train_r2": 0.9996,
+    "train_size": 12784337,
+    "test_size": 3197075,
+    "ndcg": 1.0,
+    "test_r2": 0.9666
+  },
+  "features": [
+    "gap_score",
+    "interest_score",
+    "community_approval",
+    "difficulty_suitability",
+    "gap_interest",
+    "approval_probability",
+    "task_count_in_domain",
+    "task_role_relevance",
+    "domain_importance"
+  ],
+  "timestamp": "2026-04-14 13:35:41.315521"
+}

@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-04-14 14:27:38.045875",
+  "health": {
+    "community_health_score": 0.821,
+    "status": "GOOD",
+    "components": {
+      "feature_drift": 0.998,
+      "label_drift": 0.5,
+      "approval_rate": 1.0,
+      "ndcg": 0.976,
+      "churn_risk": 0.503
+    },
+    "timestamp": "2026-04-14 14:27:38.045181"
+  },
+  "psi_summary": {
+    "alerts": 0,
+    "warnings": 0,
+    "stable": 17
+  },
+  "label_drift": {
+    "ks_statistic": 0.176,
+    "p_value": 0.000252,
+    "drift_detected": true,
+    "status": "ALERT",
+    "action": "Regenerate labels + retrain"
+  },
+  "approval_rate": {
+    "current_rate": 0.73,
+    "control_chart": {
+      "mean": 0.7262,
+      "ucl": 0.7768,
+      "lcl": 0.6757,
+      "sigma": 0.0169
+    },
+    "in_control": true,
+    "status": "STABLE",
+    "action": "No action"
+  },
+  "retrain_decision": {
+    "should_retrain": true,
+    "urgency": "HIGH",
+    "confidence": "MEDIUM",
+    "signal_count": 1,
+    "signals": {
+      "psi_alert": false,
+      "ks_alert": true,
+      "approval_breached": false,
+      "health_dropped": false,
+      "interval_ready": true
+    },
+    "reasons": [
+      "Label drift (p=0.000252)"
+    ],
+    "recommended_action": "RETRAIN ALL MODELS",
+    "timestamp": "2026-04-14 14:27:38.045536"
+  }
+}

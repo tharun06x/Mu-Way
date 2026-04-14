@@ -1,0 +1,274 @@
+{
+  "generated": 32883,
+  "timestamp": "2026-04-14 14:27:06.490949",
+  "avg_health": 0.0506,
+  "pct_healthy": 0.24,
+  "sample": {
+    "user_id": "1234arjun1223@gmail.com@mulearn",
+    "created_date": "2026-04-14",
+    "dream_role": "Full Stack Developer",
+    "career_gap": 0.5475,
+    "career_gap_tier": "CRITICAL",
+    "readiness_pct": 45.25,
+    "total_weeks": 17,
+    "roadmap_weeks": [
+      {
+        "week": 1,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Chat Karma",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 2.2202
+          }
+        ]
+      },
+      {
+        "week": 2,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Self Introduction",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9784
+          }
+        ]
+      },
+      {
+        "week": 3,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Muid Task",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9421
+          }
+        ]
+      },
+      {
+        "week": 4,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Discord Guide",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9414
+          }
+        ]
+      },
+      {
+        "week": 5,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Typing Challenge",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9298
+          }
+        ]
+      },
+      {
+        "week": 6,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "extra-karma",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9224
+          }
+        ]
+      },
+      {
+        "week": 7,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Introduction to GitHub",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9183
+          }
+        ]
+      },
+      {
+        "week": 8,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Introduction to Command line",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9173
+          }
+        ]
+      },
+      {
+        "week": 9,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Tell the World",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9172
+          }
+        ]
+      },
+      {
+        "week": 10,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Introduction to Markdown",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9164
+          }
+        ]
+      },
+      {
+        "week": 11,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Introduction to HTML",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9157
+          }
+        ]
+      },
+      {
+        "week": 12,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Drug Free Kerala Pledge",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9155
+          }
+        ]
+      },
+      {
+        "week": 13,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Find Better",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9141
+          }
+        ]
+      },
+      {
+        "week": 14,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Introduction to GitHub pages",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9128
+          }
+        ]
+      },
+      {
+        "week": 15,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Connect Muelarn and DWMS",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9113
+          }
+        ]
+      },
+      {
+        "week": 16,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Google AI Pro Student Pack Free",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9102
+          }
+        ]
+      },
+      {
+        "week": 16,
+        "hours_used": 2,
+        "tasks": [
+          {
+            "task_name": "Google AI Pro Student Pack Free",
+            "domain": "general",
+            "urgency_tier": "MAINTENANCE",
+            "difficulty_level": 2,
+            "score": 1.9102
+          }
+        ]
+      }
+    ],
+    "roadmap_health": 0.0,
+    "domain_gaps": {
+      "web": {
+        "current": 0.0,
+        "required": 0.8,
+        "raw_gap": 0.8,
+        "weighted_gap": 0.32,
+        "tier": "CRITICAL",
+        "domain_alignment": 0.0
+      },
+      "dsa": {
+        "current": 0.0,
+        "required": 0.65,
+        "raw_gap": 0.65,
+        "weighted_gap": 0.2275,
+        "tier": "CRITICAL",
+        "domain_alignment": 0.0
+      },
+      "general": {
+        "current": 1.0,
+        "required": 0.4,
+        "raw_gap": 0.0,
+        "weighted_gap": 0.0,
+        "tier": "MET",
+        "domain_alignment": 1.0
+      }
+    },
+    "summary": {
+      "total_weeks": 17,
+      "total_tasks": 17,
+      "health_score": 0.0,
+      "health_ok": false,
+      "first_week_domains": [
+        "general"
+      ]
+    }
+  }
+}
