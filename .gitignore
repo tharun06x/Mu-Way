@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+venv/
+.venv/
+data/raw/*
+!data/raw/.gitkeep
+models/*.pkl
+output/*.pkl
+output/*.json
+output/*.csv
+*.xlsx
+~$*

@@ -14,6 +14,7 @@ Usage:
 import argparse
 import json
 import logging
+import sys
 import time
 from pathlib import Path
 
@@ -29,6 +30,9 @@ logging.basicConfig(
     datefmt='%H:%M:%S',
 )
 logger = logging.getLogger(__name__)
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
@@ -281,7 +285,7 @@ def main():
     print('Output files:')
     for f in [config.FEATURE_STORE_FILE, config.CAREER_GAP_FILE,
               config.RANKING_MODEL_FILE, config.ROADMAP_FILE, config.HEALTH_REPORT_FILE]:
-        exists = '✓' if Path(f).exists() else '✗'
+        exists = 'OK' if Path(f).exists() else 'MISSING'
         print(f'  {exists}  {f}')
 
 

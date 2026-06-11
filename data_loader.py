@@ -58,6 +58,8 @@ class DataLoader:
         # Parse date
         df['submission_date'] = pd.to_datetime(df['submission_date'], errors='coerce')
         df = df.dropna(subset=['submission_date', 'user_id'])
+        if 'is_team_member' in df.columns:
+            df = df[~df['is_team_member'].fillna(False).astype(bool)].copy()
 
         # Synthetic approval  — query.xlsx has no approval column.
         # We use a realistic 73 % approval rate seeded for reproducibility.
@@ -98,7 +100,8 @@ class DataLoader:
 
         # ── Step 2: karma master for enrichment ──────────────── #
         try:
-            km = pd.read_excel(config.KARMA_MASTER_FILE)
+            sheets = pd.read_excel(config.KARMA_MASTER_FILE, sheet_name=None)
+            km = pd.concat(sheets.values(), ignore_index=True)
             km.columns = km.columns.str.strip().str.lower()
             km.rename(columns={
                 'activity title': 'task_name',
@@ -118,10 +121,16 @@ class DataLoader:
                 km.get('task_karma_value', 50), errors='coerce'
             ).fillna(50)
 
-            km_enrich = km[['task_name', 'difficulty_level', 'task_karma_value']].dropna(subset=['task_name'])
+            km_enrich = km[[
+                'task_name', 'km_domain', 'difficulty_level',
+                'task_karma_value', 'task_type', 'complexity'
+            ]].dropna(subset=['task_name']).drop_duplicates(subset=['task_name'])
         except Exception as exc:
             logger.warning(f"Could not load karma master: {exc}")
-            km_enrich = pd.DataFrame(columns=['task_name', 'difficulty_level', 'task_karma_value'])
+            km_enrich = pd.DataFrame(columns=[
+                'task_name', 'km_domain', 'difficulty_level',
+                'task_karma_value', 'task_type', 'complexity'
+            ])
 
         # ── Step 3: merge enrichment into catalog ─────────────── #
         if len(task_catalog):
@@ -133,6 +142,12 @@ class DataLoader:
         # Fill defaults
         task_catalog['difficulty_level']  = task_catalog.get('difficulty_level', 2).fillna(2).astype(int)
         task_catalog['task_karma_value']  = task_catalog.get('task_karma_value', 50).fillna(50)
+        if 'complexity' not in task_catalog.columns:
+            task_catalog['complexity'] = 'Medium'
+        task_catalog['complexity'] = task_catalog['complexity'].fillna('Medium')
+        if 'task_type' not in task_catalog.columns:
+            task_catalog['task_type'] = 'Learning'
+        task_catalog['task_type'] = task_catalog['task_type'].fillna('Learning')
 
         logger.info(f"Task catalog ready: {len(task_catalog)} tasks")
         return task_catalog

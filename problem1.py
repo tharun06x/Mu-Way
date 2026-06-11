@@ -36,21 +36,40 @@ PRIOR_T      = config.BAYESIAN_PRIOR_TOTAL
 # ─────────────────────────────────────────────────────────────────────────── #
 
 _DOMAIN_TOKEN_MAP = {
+    # AI / ML
     'ai': 'ai', 'ml': 'ai', 'genai': 'ai', 'logistic': 'ai',
-    'linreg': 'ai', 'logreg': 'ai',
-    'ds': 'ds', 'da': 'ds',
+    'linreg': 'ai', 'logreg': 'ai', 'llm': 'ai', 'rag': 'ai',
+    'prompt': 'ai', 'linearregression': 'ai', 'logisticregression': 'ai',
+    'gradientdescent': 'ai', 'hfdeploy': 'ai', 'buildspace': 'ai',
+    'prompt2pmtool': 'ai',
+    # Data Science
+    'ds': 'ds', 'da': 'ds', 'eda': 'ds', 'implementation': 'ds',
+    'linreg': 'ds', 'jobscraper': 'ds',
+    # Web
     'web': 'web', 'react': 'web', 'firebase': 'web',
     'javascript': 'web', 'frontend': 'web', 'beweb': 'web',
-    'dsa': 'dsa', 'algorithm': 'dsa',
+    'html': 'web', 'css': 'web', 'bootstrap': 'web',
+    'ui': 'web', 'ux': 'web', 'responsive': 'web',
+    # DSA
+    'dsa': 'dsa', 'algorithm': 'dsa', 'leetcode': 'dsa',
+    'datastructure': 'dsa', 'competitive': 'dsa',
+    # DevOps / IoT
     'dop': 'devops', 'devops': 'devops', 'docker': 'devops',
-    'cybersec': 'cybersec', 'security': 'cybersec',
+    'kubernetes': 'devops', 'cicd': 'devops',
+    # Cybersecurity
+    'cybersec': 'cybersec', 'security': 'cybersec', 'ctf': 'cybersec',
+    'ethical': 'cybersec', 'hacking': 'cybersec', 'thm': 'cybersec',
+    'thmnmap': 'cybersec', 'pentest': 'cybersec',
+    # Android / Mobile
     'android': 'android', 'flutter': 'android',
     'dart': 'android', 'kotlin': 'android',
+    'mobile': 'android', 'app': 'android',
 }
 
 _STRUCTURAL = {
-    'ge', 'cl', 'lp24', 'lp25', 'lp', 'evn', 'daily',
-    'pathway', 'intro', 'to', 'the', 'a',
+    'ge', 'cl', 'lp24', 'lp25', 'lp', 'evn', 'daily', 'my',
+    'pathway', 'intro', 'to', 'the', 'a', 'tfp', 'challenge',
+    'level1', 'level2', 'level3', 'level4', 'level5', 'level6',
 }
 
 
@@ -137,6 +156,30 @@ def compute_user_features(
     """
     ref = pd.Timestamp(reference_date) if reference_date else pd.Timestamp.now()
     df  = user_data.copy()
+    df['submission_date'] = pd.to_datetime(df['submission_date'], errors='coerce')
+    df = df.dropna(subset=['submission_date'])
+    df = df[df['submission_date'] <= ref].copy()
+    if 'is_team_member' in df.columns:
+        df = df[~df['is_team_member'].fillna(False).astype(bool)].copy()
+
+    if len(df) == 0:
+        feat = {
+            'user_id': user_id,
+            'total_submissions': 0,
+            'experience_level': 1,
+            'global_approval_rate': 0.5,
+            'engagement_score': 0.0,
+            'optimal_difficulty': 1.5,
+            'days_since_last_submission': 999,
+            'is_cold_start': 1,
+            'approved_count': 0,
+        }
+        for dom in DOMAINS:
+            feat[f'mastery_{dom}'] = 0.0
+            feat[f'approval_conf_{dom}'] = float(PRIOR_A / PRIOR_T)
+            feat[f'task_count_{dom}'] = 0
+            feat[f'interest_{dom}'] = 0.0
+        return feat
 
     # Map domain
     df['domain_mapped'] = df['domain'].apply(hashtag_to_domain)
@@ -208,6 +251,10 @@ def build_feature_store(
         DataFrame with one row per user, 43 feature columns.
     """
     ref = pd.Timestamp(reference_date) if reference_date else pd.Timestamp.now()
+    if 'submission_date' in user_data.columns:
+        user_data = user_data[pd.to_datetime(user_data['submission_date'], errors='coerce') <= ref].copy()
+    if 'is_team_member' in user_data.columns:
+        user_data = user_data[~user_data['is_team_member'].fillna(False).astype(bool)].copy()
     logger.info(
         f"Building feature store for {user_data['user_id'].nunique():,} users ..."
     )

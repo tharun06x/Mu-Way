@@ -27,6 +27,12 @@ MAX_WEEKS         = config.MAX_ROADMAP_WEEKS   # 16
 TASK_HOURS        = {'Low': 1, 'Medium': 2, 'High': 3}  # estimated hrs per complexity
 
 
+def _normalize_task_name(value) -> str:
+    if pd.isna(value):
+        return ''
+    return ' '.join(str(value).strip().lower().split())
+
+
 # ─────────────────────────────────────────────────────────────────────────── #
 #  Urgency Tiering                                                            #
 # ─────────────────────────────────────────────────────────────────────────── #
@@ -67,7 +73,6 @@ def _enforce_difficulty_progression(tasks: pd.DataFrame) -> pd.DataFrame:
         return tasks
 
     kept     = []
-    deferred = []
     last_diff_by_domain: dict = {}
 
     for _, row in tasks.iterrows():
@@ -75,17 +80,11 @@ def _enforce_difficulty_progression(tasks: pd.DataFrame) -> pd.DataFrame:
         diff = int(row.get('difficulty_level', 2))
         last = last_diff_by_domain.get(dom)
 
-        if last is None or diff <= last + 1:
+        if last is None or (diff >= last and diff <= last + 1):
             kept.append(row)
-            last_diff_by_domain[dom] = max(last or 0, diff)
-        else:
-            deferred.append(row)
+            last_diff_by_domain[dom] = diff
 
-    # Append deferred at the end
-    return pd.concat(
-        [pd.DataFrame(kept), pd.DataFrame(deferred)],
-        ignore_index=True,
-    )
+    return pd.DataFrame(kept).reset_index(drop=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
@@ -111,7 +110,7 @@ def _schedule_weeks(tasks: pd.DataFrame) -> list:
         if current_week['hours_used'] + task_hrs > HOURS_PER_WEEK:
             weeks.append(current_week)
             if len(weeks) >= MAX_WEEKS:
-                break
+                return weeks
             current_week = {
                 'week': len(weeks) + 1,
                 'hours_used': 0,
@@ -123,6 +122,7 @@ def _schedule_weeks(tasks: pd.DataFrame) -> list:
             'domain':       row.get('domain', ''),
             'urgency_tier': row.get('urgency_tier', 'MODERATE'),
             'difficulty_level': int(row.get('difficulty_level', 2)),
+            'difficulty_order': int(row.get('difficulty_order', row.get('difficulty_level', 2))),
             'score':        round(float(row.get('score', 0.0)), 4),
         })
         current_week['hours_used'] += task_hrs
@@ -188,15 +188,32 @@ def build_roadmap_for_user(
 
     if len(recommendations) == 0:
         return {
-            'user_id':   user_id,
-            'dream_role': gap_row.get('dream_role', 'Unknown'),
-            'weeks':     [],
-            'health':    0.0,
-            'summary':   'No recommendations available.',
+            'user_id':            user_id,
+            'created_date':       str(datetime.now().date()),
+            'dream_role':         gap_row.get('dream_role', 'Unknown'),
+            'career_gap':         float(gap_row.get('career_gap', 0.0)),
+            'career_gap_tier':    gap_row.get('career_gap_tier', 'MODERATE'),
+            'readiness_pct':      float(gap_row.get('readiness_pct', 0.0)),
+            'total_weeks':        0,
+            'roadmap_weeks':      [],
+            'roadmap_health':     0.0,
+            'domain_gaps':        domain_gaps,
+            'summary': {
+                'total_weeks': 0,
+                'total_tasks': 0,
+                'health_score': 0.0,
+                'health_ok': False,
+                'first_week_domains': [],
+                'next_milestone': {
+                    'description': 'No remaining role-matched tasks found.',
+                },
+            },
         }
 
     # Attach task complexity from catalog
     recs = recommendations.copy()
+    recs['_task_key'] = recs['task_name'].apply(_normalize_task_name)
+    recs = recs.drop_duplicates('_task_key')
     if task_data is not None and 'complexity' not in recs.columns:
         cmap = task_data.set_index('task_name')['complexity'].to_dict() if 'complexity' in task_data.columns else {}
         recs['complexity'] = recs['task_name'].map(cmap).fillna('Medium')
@@ -205,19 +222,25 @@ def build_roadmap_for_user(
 
     # Step 1: urgency tiering
     recs = _assign_urgency(recs, domain_gaps)
-    recs = recs.sort_values(
-        ['urgency_order', 'score'],
-        ascending=[True, False],
-    )
+    sort_cols = [c for c in ['urgency_order', 'domain_priority',
+                             'difficulty_order', 'difficulty_level', 'score']
+                 if c in recs.columns]
+    ascending = [True, True, True, True, False][:len(sort_cols)]
+    recs = recs.sort_values(sort_cols, ascending=ascending)
 
     # Step 2: difficulty progression constraint
     recs = _enforce_difficulty_progression(recs)
 
-    # Step 3: week-by-week scheduling
-    weeks = _schedule_weeks(recs)
+    if len(recs) == 0:
+        weeks = []
+    else:
+        # Step 3: week-by-week scheduling
+        weeks = _schedule_weeks(recs)
 
     # Step 4: health score
     health = _health_score(weeks, domain_gaps)
+
+    first_task = weeks[0]['tasks'][0] if weeks and weeks[0]['tasks'] else None
 
     return {
         'user_id':            user_id,
@@ -236,6 +259,12 @@ def build_roadmap_for_user(
             'health_score':        health,
             'health_ok':          health >= 0.80,
             'first_week_domains': list({t['domain'] for t in (weeks[0]['tasks'] if weeks else [])}),
+            'next_milestone': {
+                'description': (
+                    f"Complete {first_task['task_name']}"
+                    if first_task else 'No valid difficulty-progressive tasks found.'
+                ),
+            },
         },
     }
 
@@ -264,19 +293,27 @@ def generate_career_roadmaps(
     """
     logger.info(f'Generating roadmaps for {len(career_gap_df):,} users ...')
     roadmaps = []
+    score_col = 'final_score' if 'final_score' in pairs.columns else 'rule_score'
+    pair_groups = {uid: grp for uid, grp in pairs.groupby('user_id', sort=False)}
+    rec_cols = ['task_name', 'domain', score_col]
+    for optional_col in ['difficulty_level', 'difficulty_order', 'domain_priority', 'complexity']:
+        if optional_col in pairs.columns:
+            rec_cols.append(optional_col)
 
     for idx, row in career_gap_df.iterrows():
         uid = row['user_id']
         try:
             # Top-K recommendations for this user from pairs
-            user_pairs = pairs[pairs['user_id'] == uid]
+            user_pairs = pair_groups.get(uid)
+            if user_pairs is None:
+                continue
             if len(user_pairs) == 0:
                 continue
 
-            score_col = 'final_score' if 'final_score' in user_pairs.columns else 'rule_score'
-            recs = user_pairs.nlargest(top_k, score_col)[
-                ['task_name', 'domain', score_col]
-            ].rename(columns={score_col: 'score'})
+            recs = (
+                user_pairs.nlargest(top_k, score_col)[rec_cols]
+                .rename(columns={score_col: 'score'})
+            )
 
             roadmap = build_roadmap_for_user(uid, row, recs, task_data)
             roadmaps.append(roadmap)

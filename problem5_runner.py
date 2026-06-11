@@ -21,7 +21,22 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from scipy.stats import ks_2samp
+
+try:
+    from scipy.stats import ks_2samp
+except ImportError:
+    def ks_2samp(a, b):
+        a = np.sort(np.asarray(a, dtype=float))
+        b = np.sort(np.asarray(b, dtype=float))
+        if len(a) == 0 or len(b) == 0:
+            return 0.0, 1.0
+        values = np.sort(np.unique(np.concatenate([a, b])))
+        cdf_a = np.searchsorted(a, values, side='right') / len(a)
+        cdf_b = np.searchsorted(b, values, side='right') / len(b)
+        stat = float(np.max(np.abs(cdf_a - cdf_b)))
+        n_eff = len(a) * len(b) / (len(a) + len(b))
+        p_value = float(min(1.0, 2.0 * np.exp(-2.0 * n_eff * stat * stat)))
+        return stat, p_value
 
 import config
 

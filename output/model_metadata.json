@@ -1,10 +1,12 @@
 {
   "metrics": {
-    "train_r2": 0.9996,
-    "train_size": 12784337,
-    "test_size": 3197075,
-    "ndcg": 1.0,
-    "test_r2": 0.9666
+    "model_type": "rule_based_fallback",
+    "reason": "scikit-learn is not installed",
+    "train_size": 14760566,
+    "test_size": 0,
+    "ndcg": 0.0,
+    "train_r2": 0.0,
+    "test_r2": 0.0
   },
   "features": [
     "gap_score",
@@ -17,5 +19,5 @@
     "task_role_relevance",
     "domain_importance"
   ],
-  "timestamp": "2026-04-14 13:35:41.315521"
+  "timestamp": "2026-06-11 22:27:35.573383"
 }

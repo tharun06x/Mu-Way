@@ -1,27 +1,28 @@
 {
   "generated": 32883,
-  "timestamp": "2026-04-14 14:27:06.490949",
-  "avg_health": 0.0506,
-  "pct_healthy": 0.24,
+  "timestamp": "2026-06-11 22:30:42.049040",
+  "avg_health": 0.0595,
+  "pct_healthy": 0.92,
   "sample": {
     "user_id": "1234arjun1223@gmail.com@mulearn",
-    "created_date": "2026-04-14",
+    "created_date": "2026-06-11",
     "dream_role": "Full Stack Developer",
-    "career_gap": 0.5475,
+    "career_gap": 0.54,
     "career_gap_tier": "CRITICAL",
-    "readiness_pct": 45.25,
-    "total_weeks": 17,
+    "readiness_pct": 46.0,
+    "total_weeks": 16,
     "roadmap_weeks": [
       {
         "week": 1,
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Chat Karma",
+            "task_name": "Python through Snakify 1",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 2.2202
+            "difficulty_order": 2,
+            "score": 0.6103
           }
         ]
       },
@@ -30,11 +31,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Self Introduction",
+            "task_name": "Learning Fest Rank Card",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9784
+            "difficulty_order": 2,
+            "score": 0.6105
           }
         ]
       },
@@ -43,11 +45,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Muid Task",
+            "task_name": "Scratch Game",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9421
+            "difficulty_order": 2,
+            "score": 0.6106
           }
         ]
       },
@@ -56,11 +59,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Discord Guide",
+            "task_name": "Linux Fundamentals 1",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9414
+            "difficulty_order": 2,
+            "score": 0.611
           }
         ]
       },
@@ -69,11 +73,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Typing Challenge",
+            "task_name": "Complete VOC course in YIP",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9298
+            "difficulty_order": 2,
+            "score": 0.6112
           }
         ]
       },
@@ -82,11 +87,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "extra-karma",
+            "task_name": "Google AI Pro Student Pack Free",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9224
+            "difficulty_order": 2,
+            "score": 0.6113
           }
         ]
       },
@@ -95,11 +101,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Introduction to GitHub",
+            "task_name": "Connect Muelarn and DWMS",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9183
+            "difficulty_order": 2,
+            "score": 0.6119
           }
         ]
       },
@@ -108,11 +115,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Introduction to Command line",
+            "task_name": "Introduction to GitHub pages",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9173
+            "difficulty_order": 2,
+            "score": 0.6127
           }
         ]
       },
@@ -121,11 +129,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Tell the World",
+            "task_name": "Find Better",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9172
+            "difficulty_order": 2,
+            "score": 0.6133
           }
         ]
       },
@@ -134,11 +143,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Introduction to Markdown",
+            "task_name": "Drug Free Kerala Pledge",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9164
+            "difficulty_order": 2,
+            "score": 0.6137
           }
         ]
       },
@@ -147,11 +157,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Introduction to HTML",
+            "task_name": "Introduction to Markdown",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9157
+            "difficulty_order": 2,
+            "score": 0.6144
           }
         ]
       },
@@ -160,11 +171,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Drug Free Kerala Pledge",
+            "task_name": "Tell the World",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9155
+            "difficulty_order": 2,
+            "score": 0.6147
           }
         ]
       },
@@ -173,11 +185,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Find Better",
+            "task_name": "Introduction to Command line",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9141
+            "difficulty_order": 2,
+            "score": 0.6148
           }
         ]
       },
@@ -186,11 +199,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Introduction to GitHub pages",
+            "task_name": "Introduction to GitHub",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9128
+            "difficulty_order": 2,
+            "score": 0.6155
           }
         ]
       },
@@ -199,11 +213,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Connect Muelarn and DWMS",
+            "task_name": "extra-karma",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9113
+            "difficulty_order": 2,
+            "score": 0.6174
           }
         ]
       },
@@ -212,24 +227,12 @@
         "hours_used": 2,
         "tasks": [
           {
-            "task_name": "Google AI Pro Student Pack Free",
+            "task_name": "Typing Challenge",
             "domain": "general",
             "urgency_tier": "MAINTENANCE",
             "difficulty_level": 2,
-            "score": 1.9102
-          }
-        ]
-      },
-      {
-        "week": 16,
-        "hours_used": 2,
-        "tasks": [
-          {
-            "task_name": "Google AI Pro Student Pack Free",
-            "domain": "general",
-            "urgency_tier": "MAINTENANCE",
-            "difficulty_level": 2,
-            "score": 1.9102
+            "difficulty_order": 2,
+            "score": 0.6207
           }
         ]
       }
@@ -240,15 +243,15 @@
         "current": 0.0,
         "required": 0.8,
         "raw_gap": 0.8,
-        "weighted_gap": 0.32,
+        "weighted_gap": 0.48,
         "tier": "CRITICAL",
         "domain_alignment": 0.0
       },
       "dsa": {
         "current": 0.0,
-        "required": 0.65,
-        "raw_gap": 0.65,
-        "weighted_gap": 0.2275,
+        "required": 0.4,
+        "raw_gap": 0.4,
+        "weighted_gap": 0.06,
         "tier": "CRITICAL",
         "domain_alignment": 0.0
       },
@@ -262,13 +265,16 @@
       }
     },
     "summary": {
-      "total_weeks": 17,
-      "total_tasks": 17,
+      "total_weeks": 16,
+      "total_tasks": 16,
       "health_score": 0.0,
       "health_ok": false,
       "first_week_domains": [
         "general"
-      ]
+      ],
+      "next_milestone": {
+        "description": "Complete Python through Snakify 1"
+      }
     }
   }
 }

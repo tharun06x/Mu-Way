@@ -20,9 +20,19 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.metrics import ndcg_score
-from sklearn.model_selection import GroupShuffleSplit
+
+try:
+    from sklearn.ensemble import GradientBoostingRegressor
+    from sklearn.metrics import ndcg_score
+    from sklearn.model_selection import GroupShuffleSplit
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    GradientBoostingRegressor = None
+    GroupShuffleSplit = None
+    SKLEARN_AVAILABLE = False
+
+    def ndcg_score(y_true, y_score):
+        return 0.0
 
 import config
 from problem1 import hashtag_to_domain
@@ -42,6 +52,11 @@ def engineer_user_features(user_data: pd.DataFrame) -> pd.DataFrame:
     for (uid, dom), grp in user_data.groupby(['user_id', 'domain_mapped']):
         sub_count = len(grp)
         mastery   = sub_count / max_submissions
+        approved = grp[grp['is_approved'] == 1]
+        optimal_difficulty = (
+            float(approved['difficulty_level'].mean()) + 0.5
+            if len(approved) and 'difficulty_level' in approved.columns else 1.5
+        )
         records.append({
             'user_id':          uid,
             'domain':           dom,
@@ -49,6 +64,7 @@ def engineer_user_features(user_data: pd.DataFrame) -> pd.DataFrame:
             'mastery':          mastery,
             'gap_score':        1.0 - mastery,
             'approval_rate':    float(grp['is_approved'].mean()),
+            'optimal_difficulty': optimal_difficulty,
             'interest_count':   grp['task_name'].nunique(),
         })
 
@@ -98,7 +114,8 @@ def create_domain_matched_pairs(
     Reduces pair count from ~24 M to ~100 K–300 K.
     """
     user_cols = ['user_id', 'domain', 'interest_score', 'gap_score',
-                 'submission_count', 'mastery', 'approval_rate']
+                 'submission_count', 'mastery', 'approval_rate',
+                 'optimal_difficulty']
     task_cols = ['task_name', 'domain', 'difficulty_level', 'community_approval', 'difficulty']
 
     uf = user_features[user_cols].copy()
@@ -118,10 +135,14 @@ def create_domain_matched_pairs(
 
 def engineer_advanced_features(pairs: pd.DataFrame) -> pd.DataFrame:
     """Interaction + suitability features."""
-    opt = pairs['difficulty'].mean() + 0.5
-    pairs['difficulty_suitability'] = np.exp(-0.5 * ((pairs['difficulty'] - opt) ** 2))
+    task_diff = pairs['difficulty_level'].astype(float)
+    opt = pairs['optimal_difficulty'].astype(float).fillna(1.5)
+    pairs['difficulty_suitability'] = np.exp(-0.5 * ((task_diff - opt) ** 2))
     pairs['gap_interest']           = pairs['gap_score'] * pairs['interest_score']
-    pairs['approval_probability']   = pairs['interest_score'] * (1 - pairs['difficulty'])
+    pairs['approval_probability']   = (
+        0.70 * pairs['approval_rate'].clip(0, 1) +
+        0.30 * pairs['difficulty_suitability'].clip(0, 1)
+    )
     pairs['task_count_in_domain']   = pairs.groupby(['user_id', 'domain'])['task_name'].transform('count')
     pairs['task_role_relevance']    = 1.0
     pairs['domain_importance']      = 1.0
@@ -150,8 +171,8 @@ def compute_rule_score(pairs: pd.DataFrame) -> pd.DataFrame:
     pairs['rule_score'] = (
         config.WEIGHT_CAREER_GAP       * pairs['gap_score'] +
         config.WEIGHT_INTEREST         * pairs['interest_score'] +
-        config.WEIGHT_SUBMISSION_COUNT * pairs['community_approval'] +
-        config.WEIGHT_RECENCY          * pairs['difficulty_suitability']
+        config.WEIGHT_COMMUNITY_APPROVAL * pairs['community_approval'] +
+        config.WEIGHT_DIFFICULTY_SUITABILITY * pairs['difficulty_suitability']
     )
     return pairs
 
@@ -214,6 +235,20 @@ class RankingModel:
             logger.warning(f'Missing features: {set(self.feature_names)-set(avail)}')
         self.feature_names = avail
 
+        if not SKLEARN_AVAILABLE:
+            self.model = None
+            self.metrics = {
+                'model_type': 'rule_based_fallback',
+                'reason': 'scikit-learn is not installed',
+                'train_size': len(pairs),
+                'test_size': 0,
+                'ndcg': 0.0,
+                'train_r2': 0.0,
+                'test_r2': 0.0,
+            }
+            logger.warning('scikit-learn not installed; using rule-based fallback scores.')
+            return self.metrics
+
         X = pairs[self.feature_names]
         y = pairs['label']
         n_users = pairs['user_id'].nunique()
@@ -270,7 +305,9 @@ class RankingModel:
 
     def predict(self, pairs: pd.DataFrame) -> np.ndarray:
         if self.model is None:
-            raise ValueError('Model not trained.')
+            if 'rule_score' in pairs.columns:
+                return pairs['rule_score'].to_numpy(dtype=float)
+            raise ValueError('Model not trained and no rule_score fallback is available.')
         return self.model.predict(pairs[self.feature_names])
 
     def save(self, path):
@@ -305,9 +342,9 @@ def recommend(
 
     if (up['submission_count'].iloc[0] >= 5
             and model is not None
-            and model.model is not None):
+            and (model.model is not None or not SKLEARN_AVAILABLE)):
         up['score']  = model.predict(up)
-        up['reason'] = 'ML-based'
+        up['reason'] = 'ML-based' if model.model is not None else 'Rule-based fallback'
     else:
         up['score']  = up['rule_score']
         up['reason'] = 'Rule-based'

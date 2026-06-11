@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-04-14 14:27:38.045875",
+  "timestamp": "2026-06-11 22:31:03.580939",
   "health": {
-    "community_health_score": 0.821,
+    "community_health_score": 0.822,
     "status": "GOOD",
     "components": {
-      "feature_drift": 0.998,
+      "feature_drift": 0.997,
       "label_drift": 0.5,
       "approval_rate": 1.0,
       "ndcg": 0.976,
-      "churn_risk": 0.503
+      "churn_risk": 0.509
     },
-    "timestamp": "2026-04-14 14:27:38.045181"
+    "timestamp": "2026-06-11 22:31:03.578989"
   },
   "psi_summary": {
     "alerts": 0,
     "warnings": 0,
-    "stable": 17
+    "stable": 18
   },
   "label_drift": {
     "ks_statistic": 0.176,
-    "p_value": 0.000252,
+    "p_value": 0.000287,
     "drift_detected": true,
     "status": "ALERT",
     "action": "Regenerate labels + retrain"
@@ -49,9 +49,9 @@
       "interval_ready": true
     },
     "reasons": [
-      "Label drift (p=0.000252)"
+      "Label drift (p=0.000287)"
     ],
     "recommended_action": "RETRAIN ALL MODELS",
-    "timestamp": "2026-04-14 14:27:38.045536"
+    "timestamp": "2026-06-11 22:31:03.578989"
   }
 }

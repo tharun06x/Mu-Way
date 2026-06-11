@@ -12,7 +12,7 @@ OUTPUT_DIR = Path("output")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 QUERY_FILE          = DATA_DIR / "query.xlsx"
-KARMA_MASTER_FILE   = DATA_DIR / "Karma_Master_-_Software_1_.xlsx"
+KARMA_MASTER_FILE   = DATA_DIR / "Karma Master - Software(1).xlsx"
 
 FEATURE_STORE_FILE  = OUTPUT_DIR / "feature_store.pkl"
 CAREER_GAP_FILE     = OUTPUT_DIR / "career_gaps.csv"
@@ -39,52 +39,70 @@ GAP_TIER_MODERATE = 0.01
 GAP_TIER_MARGINAL = 0.001
 
 ROLE_REQUIREMENTS = {
+
+    # Data Scientist — ds and ai are the core, dsa is light foundation
     'Data Scientist': {
-        'ds':      (0.85, 0.35),
-        'ai':      (0.75, 0.30),
-        'dsa':     (0.65, 0.20),
-        'general': (0.50, 0.15),
+        'ds':      (0.85, 0.45),   # primary — EDA, stats, modelling
+        'ai':      (0.75, 0.35),   # important — ML algorithms
+        'dsa':     (0.50, 0.10),   # supporting — basic coding efficiency
+        'general': (0.40, 0.10),   # foundation
     },
+
+    # AI Engineer — ai dominates, ds is close second, dsa minor
     'AI Engineer': {
-        'ai':      (0.90, 0.40),
-        'ds':      (0.75, 0.25),
-        'dsa':     (0.70, 0.25),
-        'general': (0.50, 0.10),
+        'ai':      (0.90, 0.55),   # primary
+        'ds':      (0.70, 0.30),   # secondary
+        'dsa':     (0.45, 0.08),   # light foundation
+        'general': (0.40, 0.07),
     },
+
+    # Web Developer — web is everything, dsa is just light background
     'Web Developer': {
-        'web':     (0.80, 0.50),
-        'dsa':     (0.60, 0.30),
+        'web':     (0.80, 0.70),   # primary
+        'dsa':     (0.35, 0.10),   # light background (basic problem solving)
         'general': (0.40, 0.20),
     },
+
+    # Full Stack Developer — web leads, dsa is supporting
     'Full Stack Developer': {
-        'web':     (0.80, 0.40),
-        'dsa':     (0.65, 0.35),
+        'web':     (0.80, 0.60),   # primary
+        'dsa':     (0.40, 0.15),   # supporting
         'general': (0.40, 0.25),
     },
+
+    # Frontend Developer — web almost entirely, dsa minimal
     'Frontend Developer': {
-        'web':     (0.85, 0.55),
-        'dsa':     (0.50, 0.25),
-        'general': (0.40, 0.20),
+        'web':     (0.85, 0.75),   # primary
+        'dsa':     (0.30, 0.08),   # very light (basic logic only)
+        'general': (0.40, 0.17),
     },
+
+    # Backend Developer — only role where DSA is truly co-equal
     'Backend Developer': {
-        'web':     (0.75, 0.35),
-        'dsa':     (0.75, 0.45),
+        'web':     (0.70, 0.40),   # backend APIs, DB
+        'dsa':     (0.70, 0.40),   # algorithms genuinely matter here
         'general': (0.40, 0.20),
     },
+
+    # DevOps — no DSA needed, infra and scripting dominate
     'DevOps Engineer': {
-        'devops':  (0.80, 0.50),
-        'web':     (0.60, 0.30),
-        'general': (0.40, 0.20),
+        'devops':  (0.80, 0.65),   # primary
+        'web':     (0.50, 0.25),   # scripting, APIs
+        'general': (0.40, 0.10),
     },
+
+    # Android — android SDK dominates, dsa is light
     'Android Developer': {
-        'android': (0.80, 0.55),
-        'dsa':     (0.65, 0.30),
-        'general': (0.40, 0.15),
+        'android': (0.80, 0.70),   # primary
+        'dsa':     (0.40, 0.12),   # supporting
+        'general': (0.40, 0.18),
     },
+
+    # Security Engineer — cybersec dominates, dsa very light
     'Security Engineer': {
-        'cybersec': (0.80, 0.55),
-        'dsa':      (0.60, 0.30),
-        'general':  (0.40, 0.15),
+        'cybersec': (0.80, 0.72),  # primary
+        'dsa':      (0.35, 0.10),  # light (scripting, basic logic)
+        'general':  (0.40, 0.18),
     },
 }
 
@@ -105,8 +123,12 @@ DOMAIN_TO_ROLE = {
 TOP_K_RECOMMENDATIONS       = 5
 WEIGHT_CAREER_GAP           = 0.40
 WEIGHT_INTEREST             = 0.30
-WEIGHT_SUBMISSION_COUNT     = 0.20
-WEIGHT_RECENCY              = 0.10
+WEIGHT_COMMUNITY_APPROVAL   = 0.20
+WEIGHT_DIFFICULTY_SUITABILITY = 0.10
+
+# Backward-compatible aliases for older code paths.
+WEIGHT_SUBMISSION_COUNT     = WEIGHT_COMMUNITY_APPROVAL
+WEIGHT_RECENCY              = WEIGHT_DIFFICULTY_SUITABILITY
 
 GBREGRESSOR_N_ESTIMATORS    = 100
 GBREGRESSOR_LEARNING_RATE   = 0.1

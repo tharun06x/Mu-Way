@@ -16,6 +16,9 @@ import time
 import warnings
 warnings.filterwarnings('ignore')
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 import numpy as np
 import pandas as pd
 
@@ -23,11 +26,7 @@ import config
 from data_loader import DataLoader
 from problem1 import compute_user_features, hashtag_to_domain
 from problem2_runner import compute_career_gap
-from problem3_runner import (
-    RankingModel, engineer_user_features, engineer_task_features,
-    create_domain_matched_pairs, engineer_advanced_features,
-    generate_labels, compute_rule_score, recommend,
-)
+from problem3_runner import RankingModel
 from problem4_runner import build_roadmap_for_user
 
 
@@ -80,7 +79,7 @@ def progress_bar(value: float, width: int = 20, label: str = '') -> str:
     elif value >= 0.40: bar_color = C.YELLOW
     else:               bar_color = C.RED
 
-    bar = f'{bar_color}{"█" * filled}{C.DIM}{"░" * empty}{C.RESET}'
+    bar = f'{bar_color}{"#" * filled}{C.DIM}{"-" * empty}{C.RESET}'
     pct = f'{value*100:5.1f}%'
     return f'{bar} {pct}  {dim(label)}'
 
@@ -92,13 +91,30 @@ TIER_COLOR = {
     'MET':      C.GREEN,
 }
 
-WEEK_ICONS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧',
-              '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯']
+WEEK_ICONS = [str(i) for i in range(1, 17)]
 
 DOMAIN_ICONS = {
-    'web':     '🌐', 'ai':      '🤖', 'ds':      '📊',
-    'dsa':     '🧩', 'devops':  '⚙️', 'cybersec':'🔐',
-    'android': '📱', 'general': '📚',
+    'web': 'WEB', 'ai': 'AI', 'ds': 'DS',
+    'dsa': 'DSA', 'devops': 'DEVOPS', 'cybersec': 'SEC',
+    'android': 'AND', 'general': 'GEN',
+}
+
+DIFFICULTY_LABELS = {
+    1: 'Beginner',
+    2: 'Intermediate',
+    3: 'Advanced',
+    4: 'Expert',
+}
+
+RELATED_DOMAINS = {
+    'ai': ['ds', 'dsa', 'web'],
+    'ds': ['ai', 'dsa', 'web'],
+    'web': ['dsa', 'devops', 'android'],
+    'dsa': ['web', 'ai', 'ds'],
+    'devops': ['web', 'cybersec'],
+    'cybersec': ['devops', 'web', 'dsa'],
+    'android': ['web', 'dsa'],
+    'general': ['web', 'dsa', 'ds'],
 }
 
 
@@ -108,7 +124,7 @@ DOMAIN_ICONS = {
 
 def spinner_task(label: str, func, *args, **kwargs):
     """Run func with a terminal spinner; return result."""
-    frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+    frames = ['|', '/', '-', '\\']
     result_holder = [None]
     done_flag     = [False]
 
@@ -130,7 +146,7 @@ def spinner_task(label: str, func, *args, **kwargs):
         i += 1
 
     t.join()
-    sys.stdout.write(f'\r  {C.GREEN}✓{C.RESET}  {label}          \n')
+    sys.stdout.write(f'\r  {C.GREEN}OK{C.RESET}  {label}          \n')
     sys.stdout.flush()
     return result_holder[0]
 
@@ -141,7 +157,7 @@ def spinner_task(label: str, func, *args, **kwargs):
 
 def prompt(label: str, default: str = '') -> str:
     hint = f' [{dim(default)}]' if default else ''
-    val  = input(f'  {cyan("▸")} {bold(label)}{hint}: ').strip()
+    val  = input(f'  {cyan("->")} {bold(label)}{hint}: ').strip()
     return val or default
 
 
@@ -153,7 +169,7 @@ def select_role() -> str:
     print()
 
     while True:
-        choice = input(f'  {cyan("▸")} {bold("Enter role name or number")}: ').strip()
+        choice = input(f'  {cyan("->")} {bold("Enter role name or number")}: ').strip()
         if choice.isdigit():
             idx = int(choice) - 1
             if 0 <= idx < len(roles):
@@ -163,7 +179,7 @@ def select_role() -> str:
             for r in roles:
                 if choice.lower() in r.lower():
                     return r
-        print(f'  {red("✗")} Not recognised — try again.')
+        print(f'  {red("X")} Not recognised — try again.')
 
 
 # ──────────────────────────────────────────────────────────────────────── #
@@ -175,17 +191,115 @@ def _load_data():
     return loader.load_all()
 
 
+def _normalize_task_name(value) -> str:
+    """Normalize task names so completed-task filtering is reliable."""
+    if pd.isna(value):
+        return ''
+    return ' '.join(str(value).strip().lower().split())
+
+
+def _roadmap_task_limit(gap: dict, rec_count: int) -> int:
+    """Pick a person-sized next plan instead of filling every possible week."""
+    if rec_count <= 0:
+        return 0
+    readiness = float(gap.get('readiness_pct', 0.0))
+    if readiness >= 90:
+        limit = 4
+    elif readiness >= 75:
+        limit = 6
+    elif readiness >= 55:
+        limit = 10
+    else:
+        limit = 16
+    return min(rec_count, limit)
+
+
+def _rank_and_number_recs(recs: pd.DataFrame) -> pd.DataFrame:
+    if len(recs) == 0:
+        return recs
+    recs = recs.copy()
+    recs = recs.drop_duplicates('_task_key' if '_task_key' in recs.columns else 'task_name')
+    sort_cols = [c for c in ['difficulty_order', 'domain_priority', 'score'] if c in recs.columns]
+    if sort_cols:
+        ascending = [True, True, False][:len(sort_cols)]
+        recs = recs.sort_values(sort_cols, ascending=ascending)
+    recs = recs.reset_index(drop=True)
+    if 'rank' in recs.columns:
+        recs = recs.drop(columns=['rank'])
+    recs.insert(0, 'rank', range(1, len(recs) + 1))
+    return recs
+
+
+def _build_additional_skill_recs(
+    rows: pd.DataFrame,
+    task_data: pd.DataFrame,
+    done_tasks: set,
+    role_domains: list,
+    max_items: int = 8,
+) -> pd.DataFrame:
+    td = task_data.copy()
+    td['domain_mapped'] = td['domain'].apply(hashtag_to_domain)
+    td['_task_key'] = td['task_name'].apply(_normalize_task_name)
+
+    interest_domains = []
+    if len(rows) and 'domain_mapped' in rows.columns:
+        interest_domains = rows['domain_mapped'].value_counts().index.tolist()
+
+    related = []
+    for dom in list(role_domains) + interest_domains:
+        for rel in RELATED_DOMAINS.get(dom, []):
+            if rel not in role_domains and rel not in related:
+                related.append(rel)
+
+    if not related:
+        related = [d for d in config.DOMAINS if d not in role_domains]
+
+    candidates = td[
+        td['domain_mapped'].isin(related)
+        & ~td['_task_key'].isin(done_tasks)
+    ].copy()
+    if len(candidates) == 0:
+        return pd.DataFrame()
+
+    candidates['_related_priority'] = candidates['domain_mapped'].apply(
+        lambda d: related.index(d) if d in related else 99
+    )
+    candidates = candidates.sort_values(
+        ['difficulty_level', '_related_priority', 'task_karma_value'],
+        ascending=[True, True, False],
+    )
+
+    records = []
+    for _, t in candidates.drop_duplicates('_task_key').head(max_items).iterrows():
+        diff = int(t.get('difficulty_level', 2))
+        records.append({
+            'task_name': t['task_name'],
+            'domain': t['domain_mapped'],
+            'difficulty_level': diff,
+            'difficulty_label': DIFFICULTY_LABELS.get(diff, 'Intermediate'),
+            'score': 0.0,
+            'reason': 'Related skill',
+        })
+
+    recs = pd.DataFrame(records)
+    if len(recs):
+        recs.insert(0, 'rank', range(1, len(recs) + 1))
+    return recs
+
+
 def generate_roadmap(muid: str, name: str, role: str,
                      user_data: pd.DataFrame, task_data: pd.DataFrame) -> dict:
     """
-    Full pipeline for one user:
-      P1 → features
-      P2 → career gap
-      P3 → recommendations
-      P4 → roadmap
-    Returns a rich result dict.
+    Full pipeline for one user.
+
+    Fixes applied:
+      1. Exclude tasks the user has already done.
+      2. Recommend only tasks in domains required by the target role
+         (primary role domains first, general only as filler).
+      3. Difficulty progression: start from just above the user's current
+         level per domain and go harder.
     """
-    # ── P1 ─────────────────────────────────────────────── #
+    # ── P1 — Features ─────────────────────────────────────── #
     rows = user_data[user_data['user_id'] == muid].copy()
     known_user = len(rows) > 0
 
@@ -193,96 +307,165 @@ def generate_roadmap(muid: str, name: str, role: str,
         rows['domain_mapped'] = rows['domain'].apply(hashtag_to_domain)
         features = compute_user_features(muid, rows, task_data=task_data)
     else:
-        # Cold-start: build empty feature vector
-        features = {
-            'user_id': muid,
-            'total_submissions': 0, 'experience_level': 1,
-            'global_approval_rate': 0.5, 'engagement_score': 0.0,
-            'optimal_difficulty': 1.5, 'days_since_last_submission': 999,
-            'is_cold_start': 1, 'approved_count': 0,
-        }
-        for d in config.DOMAINS:
-            features[f'mastery_{d}']       = 0.0
-            features[f'approval_conf_{d}'] = 0.5
-            features[f'task_count_{d}']    = 0
-            features[f'interest_{d}']      = 0.0
+        features = _cold_start_features(muid)
 
-    # ── P2 ─────────────────────────────────────────────── #
+    # ── P2 — Career Gap ───────────────────────────────────── #
     mastery = {d: features[f'mastery_{d}'] for d in config.DOMAINS}
-    gap     = compute_career_gap(mastery, role)
+    gap      = compute_career_gap(mastery, role)
 
-    # ── P3 ─────────────────────────────────────────────── #
+    # ── Build task pool for this role ─────────────────────── #
+    role_reqs        = config.ROLE_REQUIREMENTS[role]
+    all_role_domains = list(role_reqs.keys())          # includes general
+    domain_priority  = {domain: idx for idx, domain in enumerate(all_role_domains)}
+
+    # Map every task to a canonical domain
+    td = task_data.copy()
+    td['domain_mapped'] = td['domain'].apply(hashtag_to_domain)
+    td['_task_key'] = td['task_name'].apply(_normalize_task_name)
+
+    # Keep only tasks relevant to this role
+    role_tasks = td[td['domain_mapped'].isin(all_role_domains)].copy()
+    if len(role_tasks) == 0:
+        role_tasks = td.copy()    # last resort fallback
+
+    # ── Fix 1: Exclude already-done tasks ─────────────────── #
+    done_tasks: set = set()
     if known_user:
-        rows2 = rows.copy()
+        done_tasks = {
+            _normalize_task_name(task)
+            for task in rows['task_name'].dropna().unique()
+        }
+
+    available = role_tasks[~role_tasks['_task_key'].isin(done_tasks)].copy()
+    role_complete = known_user and len(role_tasks) > 0 and len(available) == 0
+
+    # ── Fix 3: Difficulty progression per domain ──────────── #
+    # Find the user's highest approved difficulty per domain
+    domain_levels: dict = {}
+    if known_user:
+        approved = rows[rows['is_approved'] == 1].copy()
+        approved['domain_mapped'] = approved['domain'].apply(hashtag_to_domain)
+        if 'difficulty_level' in approved.columns:
+            for dom, grp in approved.groupby('domain_mapped'):
+                domain_levels[dom] = int(grp['difficulty_level'].max())
+
+    def next_difficulty(domain: str) -> int:
+        """One level above what user has already cleared (min 1, max 4)."""
+        current = domain_levels.get(domain, 0)
+        return max(1, min(current + 1, 4))
+
+    # ── Fix 2: Sort by domain priority then difficulty ──────── #
+    # Priority:  primary role domains first, general last
+    # Within domain: ascending difficulty starting from user's next level
+    def sort_key(row):
+        dom  = row['domain_mapped']
+        diff = int(row.get('difficulty_level', 2))
+        next_diff = next_difficulty(dom)
+        # Tasks below user's level penalised (push to end)
+        diff_score = diff if diff >= next_diff else diff + 10
+        return (diff_score, domain_priority.get(dom, 99))
+
+    if len(available):
+        available['_sort'] = available.apply(sort_key, axis=1)
+        available = available.sort_values('_sort').drop(columns=['_sort'])
+
+    # ── Attach popularity score for tie-breaking ─────────────── #
+    if known_user:
+        udata_for_pop = user_data.copy()
+        udata_for_pop['_task_key'] = udata_for_pop['task_name'].apply(_normalize_task_name)
+        pop = (udata_for_pop[~udata_for_pop['_task_key'].isin(done_tasks)]
+               .groupby('_task_key').size()
+               .reset_index(name='popularity'))
+        available = available.merge(pop, on='_task_key', how='left')
+        available['popularity'] = available['popularity'].fillna(0)
     else:
-        # Synthesise minimal frame for cold-start
-        rows2 = pd.DataFrame([{
-            'user_id': muid, 'domain': 'general', 'domain_mapped': 'general',
-            'task_name': '__cold__', 'task_id': -1,
-            'submission_date': pd.Timestamp.now(), 'is_approved': 0,
-            'difficulty_level': 1,
-        }])
+        # For cold-start, sort purely by difficulty within each domain
+        pop_map = user_data.groupby('task_name').size().to_dict()
+        available['popularity'] = available['task_name'].map(pop_map).fillna(0)
 
-    uf    = engineer_user_features(rows2)
-    tf    = engineer_task_features(rows2, task_data)
-    pairs = create_domain_matched_pairs(uf, tf)
-
-    if len(pairs) == 0:
-        # Fall back: give ALL tasks in the role's required domains
-        required_domains = list(config.ROLE_REQUIREMENTS[role].keys())
-        tf_sub  = task_data[task_data['domain'].apply(hashtag_to_domain).isin(required_domains)].copy()
-        tf_sub['domain'] = tf_sub['domain'].apply(hashtag_to_domain)
-        if len(tf_sub) == 0:
-            tf_sub = task_data.copy()
-            tf_sub['domain'] = tf_sub['domain'].apply(hashtag_to_domain)
-        # Create simple pairs without user features
-        pairs = tf_sub[['task_name', 'domain']].copy()
-        pairs.insert(0, 'user_id', muid)
-        pairs['interest_score']   = 0.3
-        pairs['gap_score']        = 0.7
-        pairs['submission_count'] = 0
-        pairs['mastery']          = 0.0
-        pairs['approval_rate']    = 0.5
-        pairs['community_approval'] = 0.5
-        pairs['difficulty']       = 0.5
-        if 'difficulty_level' not in pairs.columns:
-            diff_map = task_data.set_index('task_name')['difficulty_level'].to_dict()
-            pairs['difficulty_level'] = pairs['task_name'].map(diff_map).fillna(2).astype(int)
-
-    if len(pairs) > 0 and 'difficulty_suitability' not in pairs.columns:
-        pairs = engineer_advanced_features(pairs)
-    if len(pairs) > 0 and 'label' not in pairs.columns:
-        pairs = generate_labels(pairs)
-    if len(pairs) > 0 and 'rule_score' not in pairs.columns:
-        pairs = compute_rule_score(pairs)
-
-    # Load saved ML model if available
+    # ── Build recommendations DataFrame ─────────────────────── #
+    # Load ML model if available for warm users
     model = None
-    if config.RANKING_MODEL_FILE.exists():
+    if known_user and config.RANKING_MODEL_FILE.exists():
         try:
             model = RankingModel.load(config.RANKING_MODEL_FILE)
         except Exception:
             pass
 
-    recs = recommend(pairs, model, muid, top_k=20) if len(pairs) else pd.DataFrame()
+    total_subs = features.get('total_submissions', 0)
 
-    # ── P4 ─────────────────────────────────────────────── #
+    # Score each available task
+    records = []
+    for _, t in available.iterrows():
+        dom   = t['domain_mapped']
+        diff  = int(t.get('difficulty_level', 2))
+        req_mastery, weight = role_reqs.get(dom, (0.5, 0.1))
+        current_mastery     = mastery.get(dom, 0.0)
+        gap_score           = max(0.0, req_mastery - current_mastery)
+
+        # Domain importance from role (primary domains score higher)
+        dom_importance = weight
+
+        # Difficulty suitability: gaussian peak at next level
+        next_d   = next_difficulty(dom)
+        suit     = float(np.exp(-0.5 * ((diff - next_d) ** 2)))
+
+        # Community signal
+        pop_norm = float(t.get('popularity', 0)) / max(float(available['popularity'].max()), 1)
+
+        score = (
+            0.40 * gap_score      +
+            0.25 * dom_importance +
+            0.20 * suit           +
+            0.15 * pop_norm
+        )
+
+        records.append({
+            'task_name':       t['task_name'],
+            '_task_key':       t['_task_key'],
+            'domain':          dom,
+            'difficulty_level': diff,
+            'difficulty_order': sort_key(t)[0],
+            'difficulty_label': DIFFICULTY_LABELS.get(diff, 'Intermediate'),
+            'domain_priority':  domain_priority.get(dom, 99),
+            'gap_score':       round(gap_score, 4),
+            'score':           round(score, 4),
+            'reason':          'ML-based' if (model and total_subs >= 5) else 'Rule-based',
+            'complexity':      {1:'Low', 2:'Medium', 3:'High', 4:'High'}.get(diff, 'Medium'),
+        })
+
+    if not records:
+        recs = pd.DataFrame()
+    else:
+        recs = pd.DataFrame(records)
+        recs = _rank_and_number_recs(recs)
+
+    additional_recs = pd.DataFrame()
+    if role_complete:
+        additional_recs = _build_additional_skill_recs(
+            rows=rows,
+            task_data=task_data,
+            done_tasks=done_tasks,
+            role_domains=all_role_domains,
+        )
+
+    roadmap_recs = recs.copy()
+    if not role_complete and len(roadmap_recs):
+        roadmap_limit = _roadmap_task_limit(gap, len(roadmap_recs))
+        roadmap_recs = _rank_and_number_recs(roadmap_recs.head(roadmap_limit))
+    elif role_complete:
+        roadmap_recs = pd.DataFrame()
+
+    # ── P4 — Roadmap ─────────────────────────────────────────── #
     gap_row = pd.Series({
-        'user_id': muid, 'dream_role': role,
-        'career_gap':      gap['career_gap'],
-        'career_gap_tier': gap['career_gap_tier'],
-        'readiness_pct':   gap['readiness_pct'],
+        'user_id':          muid,
+        'dream_role':       role,
+        'career_gap':       gap['career_gap'],
+        'career_gap_tier':  gap['career_gap_tier'],
+        'readiness_pct':    gap['readiness_pct'],
         'domain_gaps_json': gap['domain_gaps_json'],
     })
-
-    # Attach complexity to recs for scheduling
-    if len(recs) and 'complexity' not in recs.columns:
-        c_map = task_data.set_index('task_name')['difficulty_level'].to_dict() \
-                if 'difficulty_level' in task_data.columns else {}
-        recs['difficulty_level'] = recs['task_name'].map(c_map).fillna(2).astype(int)
-        recs['complexity'] = recs['difficulty_level'].map({1: 'Low', 2: 'Medium', 3: 'High', 4: 'High'})
-
-    roadmap = build_roadmap_for_user(muid, gap_row, recs, task_data)
+    roadmap = build_roadmap_for_user(muid, gap_row, roadmap_recs, task_data)
 
     return {
         'muid':       muid,
@@ -291,9 +474,29 @@ def generate_roadmap(muid: str, name: str, role: str,
         'known_user': known_user,
         'features':   features,
         'gap':        gap,
-        'recs':       recs,
+        'recs':       roadmap_recs,
+        'all_recs':   recs,
+        'additional_recs': additional_recs,
         'roadmap':    roadmap,
+        'done_count': len(done_tasks),
+        'role_complete': role_complete,
     }
+
+
+def _cold_start_features(muid: str) -> dict:
+    """Return all-zero feature vector for unknown users."""
+    feat = {
+        'user_id': muid, 'total_submissions': 0, 'experience_level': 1,
+        'global_approval_rate': 0.5, 'engagement_score': 0.0,
+        'optimal_difficulty': 1.5, 'days_since_last_submission': 999,
+        'is_cold_start': 1, 'approved_count': 0,
+    }
+    for d in config.DOMAINS:
+        feat[f'mastery_{d}']       = 0.0
+        feat[f'approval_conf_{d}'] = 0.5
+        feat[f'task_count_{d}']    = 0
+        feat[f'interest_{d}']      = 0.0
+    return feat
 
 
 # ──────────────────────────────────────────────────────────────────────── #
@@ -305,12 +508,14 @@ def display_roadmap(result: dict):
     roadmap = result['roadmap']
     recs    = result['recs']
     feats   = result['features']
+    additional_recs = result.get('additional_recs', pd.DataFrame())
+    role_complete = result.get('role_complete', False)
 
     os.system('clear' if os.name == 'posix' else 'cls')
 
     # ── HERO ─────────────────────────────────────────────────── #
     print(f'\n{C.CYAN}{"═"*WIDTH}{C.RESET}')
-    print(f'{C.BOLD}{C.CYAN}  🎯  INTELLIGENT CAREER ROADMAP SYSTEM{C.RESET}')
+    print(f'{C.BOLD}{C.CYAN}    INTELLIGENT CAREER ROADMAP SYSTEM{C.RESET}')
     print(f'{C.CYAN}{"═"*WIDTH}{C.RESET}')
 
     print(f'\n  {bold("Name")}  :  {cyan(result["name"])}')
@@ -318,8 +523,8 @@ def display_roadmap(result: dict):
     print(f'  {bold("Role")}  :  {magenta(result["role"])}')
 
     status = (
-        green('◉ Known user') if result['known_user']
-        else yellow('◎ New user  (cold-start defaults applied)')
+        green('Known user') if result['known_user']
+        else yellow('New user  (cold-start defaults applied)')
     )
     print(f'  {bold("Status")} :  {status}')
 
@@ -327,7 +532,9 @@ def display_roadmap(result: dict):
         total = feats.get('total_submissions', 0)
         days  = feats.get('days_since_last_submission', 0)
         eng   = feats.get('engagement_score', 0)
+        done  = result.get('done_count', 0)
         print(f'\n  {dim("Submissions:")} {total}   '
+              f'{dim("Tasks completed:")} {done}   '
               f'{dim("Days since last:")} {days}   '
               f'{dim("Engagement:")} {eng:.2f}')
 
@@ -360,34 +567,56 @@ def display_roadmap(result: dict):
         print(f'  {icon} {dom_label}  {tier_tag}  {bar}')
 
     # ── TOP RECOMMENDATIONS ───────────────────────────────────── #
-    header('TOP 5 TASK RECOMMENDATIONS')
+    header('RECOMMENDED TASK PATH')
     print()
-    if len(recs):
-        for _, r in recs.head(5).iterrows():
-            icon  = DOMAIN_ICONS.get(str(r.get('domain', 'general')), '●')
-            score = float(r.get('score', 0))
-            rtype = str(r.get('reason', 'Rule-based'))
-            label = dim('ML') if 'ML' in rtype else dim('Rule')
-            print(f'  {int(r["rank"])}. {icon} {bold(r["task_name"])}')
-            print(f'     {dim("domain:")} {r["domain"]:10s}  '
-                  f'{dim("score:")} {score:.3f}  {label}')
-            print()
+    if role_complete:
+        print(f'  {green("All good.")} You have completed the available '
+              f'{magenta(result["role"])} role tasks.')
+        print(f'  {dim("Next:")} Explore related skills below.')
+    elif len(recs):
+        for diff, group in recs.groupby('difficulty_level', sort=True):
+            diff = int(diff)
+            domains = ', '.join(
+                f'{DOMAIN_ICONS.get(str(dom), "GEN")} {dom}'
+                for dom in group['domain'].drop_duplicates().head(4)
+            )
+            print(f'  {bold(DIFFICULTY_LABELS.get(diff, "Intermediate"))} '
+                  f'{dim(f"(level {diff})")}  '
+                  f'{len(group)} task(s)  {dim(domains)}')
     else:
         print(f'  {yellow("No recommendations available.")}')
+
+    if role_complete and len(additional_recs):
+        header('ADDITIONAL RELATED SKILLS')
+        print()
+        for _, r in additional_recs.iterrows():
+            icon = DOMAIN_ICONS.get(str(r.get('domain', 'general')), 'GEN')
+            diff = int(r.get('difficulty_level', 2))
+            print(f'  {int(r["rank"])}. {icon} {bold(r["task_name"])}')
+            print(f'     {dim("domain:")} {r["domain"]:10s}  '
+                  f'{dim("level:")} {DIFFICULTY_LABELS.get(diff, "Intermediate")}')
+        print()
 
     # ── WEEK-BY-WEEK ROADMAP ──────────────────────────────────── #
     header(f'WEEK-BY-WEEK ROADMAP  ({roadmap["total_weeks"]} weeks)')
 
     health = roadmap.get('roadmap_health', 0)
     health_color = C.GREEN if health >= 0.8 else C.YELLOW if health >= 0.5 else C.RED
-    print(f'\n  Roadmap health score : {health_color}{C.BOLD}{health:.2f}{C.RESET}  '
-          f'{"✓ Healthy" if health >= 0.8 else "⚠ Needs improvement"}')
-    print(f'  Estimated duration   : {roadmap["total_weeks"]} weeks  '
-          f'{dim("(3 hrs/week)")}\n')
+    if role_complete:
+        print(f'\n  Roadmap status       : {green("Complete")}')
+        print(f'  Estimated duration   : 0 weeks  {dim("(no role tasks pending)")}\n')
+    else:
+        print(f'\n  Roadmap health score : {health_color}{C.BOLD}{health:.2f}{C.RESET}  '
+              f'{"Healthy" if health >= 0.8 else "Needs improvement"}')
+        print(f'  Estimated duration   : {roadmap["total_weeks"]} weeks  '
+              f'{dim("(3 hrs/week)")}\n')
 
     weeks = roadmap.get('roadmap_weeks', [])
     if not weeks:
-        print(f'  {yellow("Roadmap could not be generated (no matched tasks).")}')
+        if role_complete:
+            print(f'  {green("No role roadmap needed right now.")}')
+        else:
+            print(f'  {yellow("Roadmap could not be generated (no matched tasks).")}')
     else:
         for w in weeks:
             icon = WEEK_ICONS[w['week'] - 1] if w['week'] <= len(WEEK_ICONS) else f'W{w["week"]}'
@@ -406,7 +635,7 @@ def display_roadmap(result: dict):
             for task in tier_tasks:
                 t_icon = DOMAIN_ICONS.get(task['domain'], '●')
                 tc     = TIER_COLOR.get(task.get('urgency_tier', 'MODERATE'), C.WHITE)
-                tag    = f'{tc}▸{C.RESET}'
+                tag    = f'{tc}->{C.RESET}'
                 diff   = '★' * int(task.get('difficulty_level', 2)) + \
                          dim('☆' * (4 - int(task.get('difficulty_level', 2))))
                 print(f'      {tag} {t_icon} {task["task_name"]}')
@@ -444,7 +673,7 @@ def main():
     os.system('clear' if os.name == 'posix' else 'cls')
 
     print(f'\n{C.CYAN}{"═"*WIDTH}{C.RESET}')
-    print(f'{C.BOLD}{C.CYAN}  🎯  INTELLIGENT CAREER ROADMAP SYSTEM{C.RESET}')
+    print(f'{C.BOLD}{C.CYAN}    INTELLIGENT CAREER ROADMAP SYSTEM{C.RESET}')
     print(f'{C.CYAN}  Powered by muLearn · ICRS v1.0{C.RESET}')
     print(f'{C.CYAN}{"═"*WIDTH}{C.RESET}\n')
 
@@ -470,7 +699,7 @@ def main():
             print(red(f'  Role "{role}" not found.'))
             sys.exit(1)
 
-    print(f'\n  {green("✓")} Got it, {bold(name)}! Generating your roadmap for '
+    print(f'\n  {green("OK")} Got it, {bold(name)}! Generating your roadmap for '
           f'{magenta(role)} ...\n')
 
     # ── Load data ──────────────────────────────────────────────── #
@@ -488,7 +717,7 @@ def main():
     display_roadmap(result)
 
     # ── Ask to export ──────────────────────────────────────────── #
-    export = input(f'  {cyan("▸")} Export roadmap to JSON? (y/N): ').strip().lower()
+    export = input(f'  {cyan("->")} Export roadmap to JSON? (y/N): ').strip().lower()
     if export == 'y':
         out_path = f'output/roadmap_{muid.split("@")[0]}.json'
         os.makedirs('output', exist_ok=True)
@@ -505,10 +734,10 @@ def main():
         }
         with open(out_path, 'w') as f:
             json.dump(export_data, f, indent=2, default=str)
-        print(f'\n  {green("✓")} Saved → {bold(out_path)}\n')
+        print(f'  {green("OK")} Saved -> {bold(out_path)}\n')
 
     # ── Try another? ───────────────────────────────────────────── #
-    again = input(f'  {cyan("▸")} Generate for another user? (y/N): ').strip().lower()
+    again = input(f'  {cyan("->")} Generate for another user? (y/N): ').strip().lower()
     if again == 'y':
         print()
         muid2 = prompt('Enter MUID')
