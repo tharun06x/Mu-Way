@@ -22,7 +22,7 @@ import config
 
 logger = logging.getLogger(__name__)
 
-HOURS_PER_WEEK    = config.HOURS_PER_WEEK     # 3
+MINUTES_PER_WEEK = getattr(config, 'MINUTES_PER_WEEK', 180) ##(new)
 MAX_WEEKS         = config.MAX_ROADMAP_WEEKS   # 16
 TASK_HOURS        = {'Low': 1, 'Medium': 2, 'High': 3}  # estimated hrs per complexity
 
@@ -93,45 +93,41 @@ def _enforce_difficulty_progression(tasks: pd.DataFrame) -> pd.DataFrame:
 
 def _schedule_weeks(tasks: pd.DataFrame) -> list:
     """
-    Pack tasks into weekly slots (3 hrs/week budget, max 16 weeks).
-
-    Returns:
-        list of dicts — {week, tasks: [{task_name, domain, urgency_tier, ...}]}
+    Pack tasks into weekly slots using precise minute budgeting.
     """
     weeks        = []
-    current_week = {'week': 1, 'hours_used': 0, 'tasks': []}
+    current_week = {'week': 1, 'minutes_used': 0, 'tasks': []}
 
     for _, row in tasks.iterrows():
-        task_hrs = TASK_HOURS.get(
-            str(row.get('complexity', 'Medium')).strip().capitalize(),
-            2,
-        )
+        # Get the parsed minutes (default to 60 if missing)
+        task_mins = int(row.get('estimated_minutes', 60))
 
-        if current_week['hours_used'] + task_hrs > HOURS_PER_WEEK:
+        # If adding this task exceeds the week's budget, start a new week
+        if current_week['minutes_used'] + task_mins > MINUTES_PER_WEEK:
             weeks.append(current_week)
             if len(weeks) >= MAX_WEEKS:
                 return weeks
             current_week = {
                 'week': len(weeks) + 1,
-                'hours_used': 0,
+                'minutes_used': 0,
                 'tasks': [],
             }
 
+        # Add task to the current week
         current_week['tasks'].append({
-            'task_name':    row.get('task_name', ''),
-            'domain':       row.get('domain', ''),
-            'urgency_tier': row.get('urgency_tier', 'MODERATE'),
+            'task_name':        row.get('task_name', ''),
+            'domain':           row.get('domain', ''),
+            'urgency_tier':     row.get('urgency_tier', 'MODERATE'),
             'difficulty_level': int(row.get('difficulty_level', 2)),
-            'difficulty_order': int(row.get('difficulty_order', row.get('difficulty_level', 2))),
-            'score':        round(float(row.get('score', 0.0)), 4),
+            'estimated_mins':   task_mins,  # Save this so UI can show it!
+            'score':            round(float(row.get('score', 0.0)), 4),
         })
-        current_week['hours_used'] += task_hrs
+        current_week['minutes_used'] += task_mins
 
     if current_week['tasks']:
         weeks.append(current_week)
 
     return weeks
-
 
 # ─────────────────────────────────────────────────────────────────────────── #
 #  Roadmap Health Score                                                       #
@@ -167,19 +163,7 @@ def build_roadmap_for_user(
     recommendations: pd.DataFrame,
     task_data: pd.DataFrame = None,
 ) -> dict:
-    """
-    Build a complete week-by-week roadmap for one user.
-
-    Args:
-        user_id        : identifier
-        gap_row        : row from career_gap_df
-        recommendations: ranked tasks from Problem 3 for this user
-        task_data      : task catalog (for complexity/hours)
-
-    Returns:
-        dict  — complete roadmap
-    """
-    # Parse domain gaps
+    """Build a complete week-by-week roadmap for one user."""
     dg_raw = gap_row.get('domain_gaps_json', '{}')
     try:
         domain_gaps = json.loads(dg_raw) if isinstance(dg_raw, str) else dg_raw
@@ -199,47 +183,68 @@ def build_roadmap_for_user(
             'roadmap_health':     0.0,
             'domain_gaps':        domain_gaps,
             'summary': {
-                'total_weeks': 0,
-                'total_tasks': 0,
-                'health_score': 0.0,
-                'health_ok': False,
+                'total_weeks': 0, 'total_tasks': 0, 'health_score': 0.0, 'health_ok': False,
                 'first_week_domains': [],
-                'next_milestone': {
-                    'description': 'No remaining role-matched tasks found.',
-                },
+                'next_milestone': {'description': 'No remaining role-matched tasks found.'},
             },
         }
 
-    # Attach task complexity from catalog
+    # Attach task complexity, difficulty, and time from catalog
     recs = recommendations.copy()
     recs['_task_key'] = recs['task_name'].apply(_normalize_task_name)
     recs = recs.drop_duplicates('_task_key')
-    if task_data is not None and 'complexity' not in recs.columns:
-        cmap = task_data.set_index('task_name')['complexity'].to_dict() if 'complexity' in task_data.columns else {}
-        recs['complexity'] = recs['task_name'].map(cmap).fillna('Medium')
-        dmap = task_data.set_index('task_name')['difficulty_level'].to_dict()
-        recs['difficulty_level'] = recs['task_name'].map(dmap).fillna(2).astype(int)
+    
+    if task_data is not None:
+        if 'complexity' not in recs.columns and 'complexity' in task_data.columns:
+            cmap = task_data.set_index('task_name')['complexity'].to_dict()
+            recs['complexity'] = recs['task_name'].map(cmap).fillna('Medium')
+            
+        if 'difficulty_level' not in recs.columns and 'difficulty_level' in task_data.columns:
+            dmap = task_data.set_index('task_name')['difficulty_level'].to_dict()
+            recs['difficulty_level'] = recs['task_name'].map(dmap).fillna(2).astype(int)
+            
+        if 'estimated_minutes' not in recs.columns and 'estimated_minutes' in task_data.columns:
+            mmap = task_data.set_index('task_name')['estimated_minutes'].to_dict()
+            recs['estimated_minutes'] = recs['task_name'].map(mmap).fillna(60).astype(int)
 
-    # Step 1: urgency tiering
+    # Step 1: Urgency tiering
     recs = _assign_urgency(recs, domain_gaps)
-    sort_cols = [c for c in ['urgency_order', 'domain_priority',
+    
+    # Step 1.5: Prerequisite Depth Mapping (Forces foundational domains to be scheduled first)
+    prereqs = getattr(config, 'DOMAIN_PREREQUISITES', {})
+    
+    ##(New function added in 2024-06-05)
+    def get_depth(dom, visited=None):
+        if visited is None: visited = set()
+        if dom in visited: return 0  # Safety against circular dependencies
+        visited.add(dom)
+        
+        reqs = prereqs.get(dom, [])
+        if not reqs: return 0
+        return 1 + max(get_depth(r, set(visited)) for r in reqs)
+
+    # Apply the dynamic calculation
+    recs['domain_depth'] = recs['domain'].apply(lambda d: get_depth(d))
+
+    # Sort logic: Urgency > Depth > Priority > Difficulty > Score (New)
+    sort_cols = [c for c in ['urgency_order', 'domain_depth', 'domain_priority',
                              'difficulty_order', 'difficulty_level', 'score']
                  if c in recs.columns]
-    ascending = [True, True, True, True, False][:len(sort_cols)]
+    
+    ascending = [True, True, True, True, True, False][:len(sort_cols)]
     recs = recs.sort_values(sort_cols, ascending=ascending)
 
-    # Step 2: difficulty progression constraint
+    # Step 2: Difficulty progression constraint
     recs = _enforce_difficulty_progression(recs)
 
     if len(recs) == 0:
         weeks = []
     else:
-        # Step 3: week-by-week scheduling
+        # Step 3: Week-by-week scheduling
         weeks = _schedule_weeks(recs)
 
-    # Step 4: health score
+    # Step 4: Health score
     health = _health_score(weeks, domain_gaps)
-
     first_task = weeks[0]['tasks'][0] if weeks and weeks[0]['tasks'] else None
 
     return {
@@ -267,7 +272,6 @@ def build_roadmap_for_user(
             },
         },
     }
-
 
 # ─────────────────────────────────────────────────────────────────────────── #
 #  Full Pipeline                                                              #

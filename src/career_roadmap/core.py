@@ -11,6 +11,9 @@ try:
 
     CANONICAL_DOMAINS = tuple(legacy_config.DOMAINS)
     ROLE_REQUIREMENTS = legacy_config.ROLE_REQUIREMENTS
+
+    DOMAIN_DISPLAY_NAMES = legacy_config.DOMAIN_DISPLAY_NAMES ## display names for the canonical domains(new)
+    DOMAIN_PREREQUISITES = legacy_config.DOMAIN_PREREQUISITES ## prerequisite domains for each canonical domain(new)
 except Exception:
     CANONICAL_DOMAINS = (
         "ai",
@@ -50,6 +53,7 @@ class ScheduledTask:
     difficulty_level: int
     urgency_tier: str
     score: float
+    estimated_minutes: int ## time allocation in minutes for task(new)
     reason: str = ""
 
 

@@ -630,7 +630,7 @@ def display_roadmap(result: dict):
                 C.BLUE
             )
             print(f'  {week_color}{C.BOLD}{icon} Week {w["week"]}{C.RESET}  '
-                  + dim(f'({w["hours_used"]} hrs)'))
+                  + dim(f'({w.get("minutes_used", 0)} mins)'))
 
             for task in tier_tasks:
                 t_icon = DOMAIN_ICONS.get(task['domain'], '●')
