@@ -2,9 +2,9 @@
 config.py — Central configuration for the Intelligent Career Roadmap System (ICRS)
 """
 
+import os
+import yaml
 from pathlib import Path
-
-# ═══════════════════════════════════════════════════════
 # File Paths
 # ═══════════════════════════════════════════════════════
 DATA_DIR = Path(".")
@@ -30,6 +30,25 @@ BAYESIAN_PRIOR_TOTAL     = 4     # pseudo-total attempts
 WARM_UP_THRESHOLD        = 5     # min submissions before full ML pipeline
 
 DOMAINS = ['ai', 'ds', 'web', 'dsa', 'devops', 'cybersec', 'android', 'general']
+
+# Load taxonomy from YAML
+TAXONOMY_FILE = DATA_DIR / "config" / "taxonomy.yaml"
+try:
+    with open(TAXONOMY_FILE, 'r') as f:
+        _taxonomy = yaml.safe_load(f)
+        
+        # Invert the mapping: from { 'ai': ['ai', 'ml', ...] } to { 'ml': 'ai', 'ai': 'ai' }
+        DOMAIN_TOKEN_MAP = {}
+        if 'domain_token_map' in _taxonomy:
+            for domain, tokens in _taxonomy['domain_token_map'].items():
+                for token in tokens:
+                    DOMAIN_TOKEN_MAP[token] = domain
+                    
+        STRUCTURAL_TOKENS = set(_taxonomy.get('structural_tokens', []))
+except Exception as e:
+    print(f"Warning: Could not load taxonomy from {TAXONOMY_FILE}: {e}")
+    DOMAIN_TOKEN_MAP = {}
+    STRUCTURAL_TOKENS = set()
 
 # ═══════════════════════════════════════════════════════
 # Problem 2 — Skill Gap Modeling

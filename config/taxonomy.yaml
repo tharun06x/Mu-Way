@@ -1,0 +1,87 @@
+domain_token_map:
+  ai:
+    - ai
+    - ml
+    - genai
+    - logistic
+    - linreg
+    - logreg
+    - llm
+    - rag
+    - prompt
+    - linearregression
+    - logisticregression
+    - gradientdescent
+    - hfdeploy
+    - buildspace
+    - prompt2pmtool
+  ds:
+    - ds
+    - da
+    - eda
+    - implementation
+    - jobscraper
+  web:
+    - web
+    - react
+    - firebase
+    - javascript
+    - frontend
+    - beweb
+    - html
+    - css
+    - bootstrap
+    - ui
+    - ux
+    - responsive
+  dsa:
+    - dsa
+    - algorithm
+    - leetcode
+    - datastructure
+    - competitive
+  devops:
+    - dop
+    - devops
+    - docker
+    - kubernetes
+    - cicd
+  cybersec:
+    - cybersec
+    - security
+    - ctf
+    - ethical
+    - hacking
+    - thm
+    - thmnmap
+    - pentest
+  android:
+    - android
+    - flutter
+    - dart
+    - kotlin
+    - mobile
+    - app
+
+structural_tokens:
+  - ge
+  - cl
+  - lp24
+  - lp25
+  - lp
+  - evn
+  - daily
+  - my
+  - pathway
+  - intro
+  - to
+  - the
+  - a
+  - tfp
+  - challenge
+  - level1
+  - level2
+  - level3
+  - level4
+  - level5
+  - level6
