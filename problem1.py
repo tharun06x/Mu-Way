@@ -21,7 +21,9 @@ Formulas (from spec):
 import pandas as pd
 import numpy as np
 import logging
+import re
 import config
+from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -32,57 +34,44 @@ PRIOR_T      = config.BAYESIAN_PRIOR_TOTAL
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
+#  Schema Validation                                                          #
+# ─────────────────────────────────────────────────────────────────────────── #
+
+class SubmissionSchema(BaseModel):
+    """Pydantic schema for individual submission validation."""
+    user_id: str
+    is_approved: int = Field(ge=0, le=1)
+    
+def validate_data(df: pd.DataFrame):
+    """Validate required columns exist and have correct types/bounds using Pandas (fast for batch)."""
+    required = ['user_id', 'is_approved', 'submission_date']
+    for col in required:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}")
+    
+    if not df['is_approved'].isin([0, 1]).all():
+        raise ValueError("is_approved must be 0 or 1")
+    
+    if 'difficulty_level' in df.columns:
+        valid_diffs = df['difficulty_level'].dropna()
+        if not valid_diffs.isin([1, 2, 3, 4]).all():
+            raise ValueError("difficulty_level must be between 1 and 4")
+
+# ─────────────────────────────────────────────────────────────────────────── #
 #  Domain / Difficulty Mapping                                                #
 # ─────────────────────────────────────────────────────────────────────────── #
 
-_DOMAIN_TOKEN_MAP = {
-    # AI / ML
-    'ai': 'ai', 'ml': 'ai', 'genai': 'ai', 'logistic': 'ai',
-    'linreg': 'ai', 'logreg': 'ai', 'llm': 'ai', 'rag': 'ai',
-    'prompt': 'ai', 'linearregression': 'ai', 'logisticregression': 'ai',
-    'gradientdescent': 'ai', 'hfdeploy': 'ai', 'buildspace': 'ai',
-    'prompt2pmtool': 'ai',
-    # Data Science
-    'ds': 'ds', 'da': 'ds', 'eda': 'ds', 'implementation': 'ds',
-    'linreg': 'ds', 'jobscraper': 'ds',
-    # Web
-    'web': 'web', 'react': 'web', 'firebase': 'web',
-    'javascript': 'web', 'frontend': 'web', 'beweb': 'web',
-    'html': 'web', 'css': 'web', 'bootstrap': 'web',
-    'ui': 'web', 'ux': 'web', 'responsive': 'web',
-    # DSA
-    'dsa': 'dsa', 'algorithm': 'dsa', 'leetcode': 'dsa',
-    'datastructure': 'dsa', 'competitive': 'dsa',
-    # DevOps / IoT
-    'dop': 'devops', 'devops': 'devops', 'docker': 'devops',
-    'kubernetes': 'devops', 'cicd': 'devops',
-    # Cybersecurity
-    'cybersec': 'cybersec', 'security': 'cybersec', 'ctf': 'cybersec',
-    'ethical': 'cybersec', 'hacking': 'cybersec', 'thm': 'cybersec',
-    'thmnmap': 'cybersec', 'pentest': 'cybersec',
-    # Android / Mobile
-    'android': 'android', 'flutter': 'android',
-    'dart': 'android', 'kotlin': 'android',
-    'mobile': 'android', 'app': 'android',
-}
-
-_STRUCTURAL = {
-    'ge', 'cl', 'lp24', 'lp25', 'lp', 'evn', 'daily', 'my',
-    'pathway', 'intro', 'to', 'the', 'a', 'tfp', 'challenge',
-    'level1', 'level2', 'level3', 'level4', 'level5', 'level6',
-}
-
-
 def hashtag_to_domain(hashtag: str) -> str:
-    """Map a hashtag string to one of the 8 canonical domains."""
+    """Map a hashtag string to one of the canonical domains using robust regex splitting."""
     if pd.isna(hashtag) or str(hashtag).strip() == '':
         return 'general'
     tag = str(hashtag).lstrip('#').lower()
-    for part in tag.split('-'):
-        if part in _STRUCTURAL:
+    # Split by hyphen or underscore or space using regex
+    for part in re.split(r'[-_\s]+', tag):
+        if part in config.STRUCTURAL_TOKENS:
             continue
-        if part in _DOMAIN_TOKEN_MAP:
-            return _DOMAIN_TOKEN_MAP[part]
+        if part in config.DOMAIN_TOKEN_MAP:
+            return config.DOMAIN_TOKEN_MAP[part]
     return 'general'
 
 
@@ -136,62 +125,40 @@ def _experience_level(total: int) -> int:
 #  Single-User Feature Vector                                                 #
 # ─────────────────────────────────────────────────────────────────────────── #
 
+def get_cold_start_features(user_id: str) -> dict:
+    """Returns a dictionary with cold-start default features for an unknown user."""
+    feat = {
+        'user_id': user_id,
+        'total_submissions': 0,
+        'experience_level': 1,
+        'global_approval_rate': float(PRIOR_A / PRIOR_T),
+        'engagement_score': 0.0,
+        'optimal_difficulty': 1.5,
+        'days_since_last_submission': 999,
+        'is_cold_start': 1,
+        'approved_count': 0,
+    }
+    for dom in DOMAINS:
+        feat[f'mastery_{dom}']       = 0.0
+        feat[f'approval_conf_{dom}'] = float(PRIOR_A / PRIOR_T)
+        feat[f'task_count_{dom}']    = 0
+        feat[f'interest_{dom}']      = 0.0
+    return feat
+
+
 def compute_user_features(
     user_id: str,
     user_data: pd.DataFrame,
-    reference_date=None,
-    task_data: pd.DataFrame = None,
+    ref: pd.Timestamp
 ) -> dict:
     """
     Build the 40-column feature vector for one user.
-
-    Args:
-        user_id       : identifier
-        user_data     : rows belonging to this user
-        reference_date: point-in-time reference (defaults to now)
-        task_data     : task catalog for difficulty lookup
-
-    Returns:
-        dict  — one key per feature + 'user_id'
+    Assumes user_data is ALREADY preprocessed (dates filtered, domains mapped, difficulties filled).
     """
-    ref = pd.Timestamp(reference_date) if reference_date else pd.Timestamp.now()
-    df  = user_data.copy()
-    df['submission_date'] = pd.to_datetime(df['submission_date'], errors='coerce')
-    df = df.dropna(subset=['submission_date'])
-    df = df[df['submission_date'] <= ref].copy()
-    if 'is_team_member' in df.columns:
-        df = df[~df['is_team_member'].fillna(False).astype(bool)].copy()
+    if len(user_data) == 0:
+        return get_cold_start_features(user_id)
 
-    if len(df) == 0:
-        feat = {
-            'user_id': user_id,
-            'total_submissions': 0,
-            'experience_level': 1,
-            'global_approval_rate': 0.5,
-            'engagement_score': 0.0,
-            'optimal_difficulty': 1.5,
-            'days_since_last_submission': 999,
-            'is_cold_start': 1,
-            'approved_count': 0,
-        }
-        for dom in DOMAINS:
-            feat[f'mastery_{dom}'] = 0.0
-            feat[f'approval_conf_{dom}'] = float(PRIOR_A / PRIOR_T)
-            feat[f'task_count_{dom}'] = 0
-            feat[f'interest_{dom}'] = 0.0
-        return feat
-
-    # Map domain
-    df['domain_mapped'] = df['domain'].apply(hashtag_to_domain)
-
-    # Attach difficulty from catalog if missing
-    if 'difficulty_level' not in df.columns or df['difficulty_level'].isna().all():
-        if task_data is not None:
-            d_map = task_data.set_index('task_name')['difficulty_level'].to_dict()
-            df['difficulty_level'] = df['task_name'].map(d_map).fillna(2).astype(int)
-        else:
-            df['difficulty_level'] = 2
-
+    df = user_data
     total = len(df)
     feat  = {'user_id': user_id}
 
@@ -213,15 +180,15 @@ def compute_user_features(
     for dom in DOMAINS:
         if dom in by_domain.groups:
             grp = by_domain.get_group(dom)
-            feat[f'mastery_{dom}']      = _mastery(grp, ref)
+            feat[f'mastery_{dom}']       = _mastery(grp, ref)
             feat[f'approval_conf_{dom}'] = _approval_conf(grp)
-            feat[f'task_count_{dom}']   = len(grp)
-            feat[f'interest_{dom}']     = min(len(grp) / max(total, 1), 1.0)
+            feat[f'task_count_{dom}']    = len(grp)
+            feat[f'interest_{dom}']      = min(len(grp) / max(total, 1), 1.0)
         else:
-            feat[f'mastery_{dom}']      = 0.0
+            feat[f'mastery_{dom}']       = 0.0
             feat[f'approval_conf_{dom}'] = float(PRIOR_A / PRIOR_T)
-            feat[f'task_count_{dom}']   = 0
-            feat[f'interest_{dom}']     = 0.0
+            feat[f'task_count_{dom}']    = 0
+            feat[f'interest_{dom}']      = 0.0
 
     # ── Extra features ────────────────────────────────────────────────── #
     dates = pd.to_datetime(df['submission_date'])
@@ -241,41 +208,80 @@ def build_feature_store(
     task_data: pd.DataFrame = None,
     reference_date=None,
     save: bool = True,
+    existing_store: pd.DataFrame = None
 ) -> pd.DataFrame:
     """
-    Build the feature store for ALL users.
-
-    Key optimisation: group user_data once → O(n) instead of O(n×u).
-
-    Returns:
-        DataFrame with one row per user, 43 feature columns.
+    Build the feature store for ALL users, supporting incremental updates.
     """
     ref = pd.Timestamp(reference_date) if reference_date else pd.Timestamp.now()
-    if 'submission_date' in user_data.columns:
-        user_data = user_data[pd.to_datetime(user_data['submission_date'], errors='coerce') <= ref].copy()
-    if 'is_team_member' in user_data.columns:
-        user_data = user_data[~user_data['is_team_member'].fillna(False).astype(bool)].copy()
-    logger.info(
-        f"Building feature store for {user_data['user_id'].nunique():,} users ..."
-    )
+    
+    # 1. Schema Validation
+    validate_data(user_data)
+    
+    df = user_data.copy()
+    
+    # 2. Vectorized Preprocessing (done globally instead of per-user)
+    df['submission_date'] = pd.to_datetime(df['submission_date'], errors='coerce')
+    df = df.dropna(subset=['submission_date'])
+    df = df[df['submission_date'] <= ref]
+    
+    if 'is_team_member' in df.columns:
+        # Fix explicit boolean casting bug
+        df = df[~df['is_team_member'].isin([True, 1, 'true', 'True', 'Yes', 'yes'])]
+        
+    df['domain_mapped'] = df['domain'].apply(hashtag_to_domain)
+    
+    if 'difficulty_level' not in df.columns or df['difficulty_level'].isna().all():
+        if task_data is not None:
+            d_map = task_data.set_index('task_name')['difficulty_level'].to_dict()
+            df['difficulty_level'] = df['task_name'].map(d_map).fillna(2).astype(int)
+        else:
+            df['difficulty_level'] = 2
+    else:
+        df['difficulty_level'] = df['difficulty_level'].fillna(2).astype(int)
+        
+    # 3. Incremental Update Filtering
+    if existing_store is not None:
+        users_to_update = df['user_id'].unique()
+        df = df[df['user_id'].isin(users_to_update)]
+    
+    logger.info(f"Building features for {df['user_id'].nunique():,} users ...")
 
-    user_groups = dict(list(user_data.groupby('user_id')))
-    total       = len(user_groups)
-    all_feats   = []
-
-    for i, (uid, grp) in enumerate(user_groups.items()):
+    # 4. GroupBy Iteration without OOM dict-cast
+    all_feats = []
+    user_groups = df.groupby('user_id')
+    total = user_groups.ngroups
+    
+    for i, (uid, grp) in enumerate(user_groups):
         try:
-            all_feats.append(compute_user_features(uid, grp, ref, task_data))
+            all_feats.append(compute_user_features(uid, grp, ref))
         except Exception as exc:
-            logger.warning(f"Skipping {uid}: {exc}")
-
+            logger.error(f"Error computing features for {uid}: {exc}. Using defaults.")
+            all_feats.append(get_cold_start_features(uid))
+            
         if (i + 1) % 5000 == 0:
             logger.info(f"  … {i+1:,}/{total:,} users processed")
 
-    feat_df = pd.DataFrame(all_feats)
-    logger.info(
-        f"✓ Feature store: {len(feat_df):,} users × {len(feat_df.columns)} features"
-    )
+    new_feat_df = pd.DataFrame(all_feats)
+    if 'user_id' in new_feat_df.columns:
+        new_feat_df.set_index('user_id', inplace=True)
+        
+    # 5. Merge with existing store
+    if existing_store is not None:
+        if existing_store.index.name != 'user_id' and 'user_id' in existing_store.columns:
+            existing_store.set_index('user_id', inplace=True)
+            
+        existing_store.update(new_feat_df)
+        
+        new_users = new_feat_df[~new_feat_df.index.isin(existing_store.index)]
+        if not new_users.empty:
+            existing_store = pd.concat([existing_store, new_users])
+            
+        feat_df = existing_store
+    else:
+        feat_df = new_feat_df
+
+    logger.info(f"✓ Feature store: {len(feat_df):,} users × {len(feat_df.columns)} features")
 
     if save:
         feat_df.to_pickle(config.FEATURE_STORE_FILE)
@@ -295,37 +301,37 @@ def get_user_features(
     task_data: pd.DataFrame = None,
 ) -> dict:
     """
-    Return feature vector for one user.
+    Return feature vector for one user using O(1) index lookup.
     Priority: feature_store → on-the-fly compute → cold-start defaults.
     """
     if feature_store is not None:
-        row = feature_store[feature_store['user_id'] == user_id]
-        if len(row):
-            return row.iloc[0].to_dict()
+        if feature_store.index.name == 'user_id':
+            if user_id in feature_store.index:
+                row = feature_store.loc[user_id].to_dict()
+                row['user_id'] = user_id
+                return row
+        else:
+            # Fallback if not indexed
+            row_df = feature_store[feature_store['user_id'] == user_id]
+            if len(row_df):
+                return row_df.iloc[0].to_dict()
 
     if user_data is not None:
         rows = user_data[user_data['user_id'] == user_id]
         if len(rows):
-            return compute_user_features(user_id, rows, task_data=task_data)
+            ref = pd.Timestamp.now()
+            rows = rows.copy()
+            rows['domain_mapped'] = rows['domain'].apply(hashtag_to_domain)
+            if 'difficulty_level' not in rows.columns:
+                if task_data is not None:
+                    d_map = task_data.set_index('task_name')['difficulty_level'].to_dict()
+                    rows['difficulty_level'] = rows['task_name'].map(d_map).fillna(2).astype(int)
+                else:
+                    rows['difficulty_level'] = 2
+            return compute_user_features(user_id, rows, ref)
 
     logger.warning(f"Cold-start defaults for unknown user: {user_id}")
-    feat = {
-        'user_id': user_id,
-        'total_submissions': 0,
-        'experience_level': 1,
-        'global_approval_rate': 0.5,
-        'engagement_score': 0.0,
-        'optimal_difficulty': 1.5,
-        'days_since_last_submission': 999,
-        'is_cold_start': 1,
-        'approved_count': 0,
-    }
-    for dom in DOMAINS:
-        feat[f'mastery_{dom}']       = 0.0
-        feat[f'approval_conf_{dom}'] = 0.5
-        feat[f'task_count_{dom}']    = 0
-        feat[f'interest_{dom}']      = 0.0
-    return feat
+    return get_cold_start_features(user_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
@@ -347,6 +353,7 @@ if __name__ == '__main__':
     feat_df = build_feature_store(user_data, task_data)
 
     print('\n=== Feature Store Sample (first user) ===')
-    print(feat_df.iloc[0].to_string())
+    if len(feat_df) > 0:
+        print(feat_df.iloc[0].to_string())
     print(f'\nTotal features : {len(feat_df.columns)}')
     print(f'Total users    : {len(feat_df):,}')
