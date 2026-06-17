@@ -149,5 +149,33 @@ class DataLoader:
             task_catalog['task_type'] = 'Learning'
         task_catalog['task_type'] = task_catalog['task_type'].fillna('Learning')
 
+        # ── Step 4: Empirical Bayesian Difficulty ─────────────── #
+        if user_df is not None and len(user_df) > 0 and 'is_approved' in user_df.columns:
+            # Get real attempts and approvals per task
+            task_stats = user_df.groupby('task_name')['is_approved'].agg(['count', 'sum']).reset_index()
+            task_stats.rename(columns={'count': 'real_attempts', 'sum': 'real_approvals'}, inplace=True)
+            
+            task_catalog = task_catalog.merge(task_stats, on='task_name', how='left')
+            task_catalog['real_attempts'] = task_catalog['real_attempts'].fillna(0)
+            task_catalog['real_approvals'] = task_catalog['real_approvals'].fillna(0)
+            
+            # Prior difficulty comes from Karma Master (1 to 4)
+            prior_diff = task_catalog['difficulty_level']
+            
+            # Map prior difficulty to expected pass rate (1 -> 0.90, 2 -> 0.70, 3 -> 0.50, 4 -> 0.30)
+            expected_rate = 0.90 - (prior_diff - 1) * 0.20
+            
+            # Bayesian smoothing
+            prior_weight = getattr(config, 'BAYESIAN_PRIOR_TASK_WEIGHT', 20)
+            smoothed_rate = ((prior_weight * expected_rate) + task_catalog['real_approvals']) / (prior_weight + task_catalog['real_attempts'])
+            
+            # Convert smoothed rate back to continuous difficulty (0.90 -> 1.0, 0.30 -> 4.0)
+            empirical_diff = 1.0 + (0.90 - smoothed_rate) * 5.0
+            
+            # Clip between 1.0 and 4.0
+            task_catalog['difficulty_level'] = empirical_diff.clip(lower=1.0, upper=4.0).astype(float)
+        else:
+            task_catalog['difficulty_level'] = task_catalog['difficulty_level'].astype(float)
+
         logger.info(f"Task catalog ready: {len(task_catalog)} tasks")
         return task_catalog

@@ -27,6 +27,7 @@ HEALTH_REPORT_FILE  = OUTPUT_DIR / "health_report.json"
 DECAY_LAMBDA            = 0.95   # time decay per day
 BAYESIAN_PRIOR_APPROVALS = 2     # pseudo-approvals
 BAYESIAN_PRIOR_TOTAL     = 4     # pseudo-total attempts
+BAYESIAN_PRIOR_TASK_WEIGHT = 20  # fake attempts for task empirical difficulty
 WARM_UP_THRESHOLD        = 5     # min submissions before full ML pipeline
 
 DOMAINS = ['ai', 'ds', 'web', 'dsa', 'devops', 'cybersec', 'android', 'general']

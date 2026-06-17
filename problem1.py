@@ -75,13 +75,13 @@ def hashtag_to_domain(hashtag: str) -> str:
     return 'general'
 
 
-def karma_to_difficulty(karma) -> int:
+def karma_to_difficulty(karma) -> float:
     """Map karma value → difficulty level 1-4."""
-    if pd.isna(karma) or karma <= 0:  return 1
-    if karma <= 30:   return 1
-    if karma <= 100:  return 2
-    if karma <= 300:  return 3
-    return 4
+    if pd.isna(karma) or karma <= 0:  return 1.0
+    if karma <= 30:   return 1.0
+    if karma <= 100:  return 2.0
+    if karma <= 300:  return 3.0
+    return 4.0
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
@@ -234,11 +234,11 @@ def build_feature_store(
     if 'difficulty_level' not in df.columns or df['difficulty_level'].isna().all():
         if task_data is not None:
             d_map = task_data.set_index('task_name')['difficulty_level'].to_dict()
-            df['difficulty_level'] = df['task_name'].map(d_map).fillna(2).astype(int)
+            df['difficulty_level'] = df['task_name'].map(d_map).fillna(2.0).astype(float)
         else:
-            df['difficulty_level'] = 2
+            df['difficulty_level'] = 2.0
     else:
-        df['difficulty_level'] = df['difficulty_level'].fillna(2).astype(int)
+        df['difficulty_level'] = df['difficulty_level'].fillna(2.0).astype(float)
         
     # 3. Incremental Update Filtering
     if existing_store is not None:
@@ -325,9 +325,9 @@ def get_user_features(
             if 'difficulty_level' not in rows.columns:
                 if task_data is not None:
                     d_map = task_data.set_index('task_name')['difficulty_level'].to_dict()
-                    rows['difficulty_level'] = rows['task_name'].map(d_map).fillna(2).astype(int)
+                    rows['difficulty_level'] = rows['task_name'].map(d_map).fillna(2.0).astype(float)
                 else:
-                    rows['difficulty_level'] = 2
+                    rows['difficulty_level'] = 2.0
             return compute_user_features(user_id, rows, ref)
 
     logger.warning(f"Cold-start defaults for unknown user: {user_id}")
