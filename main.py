@@ -120,10 +120,8 @@ def predict_for_user(user_id: str, user_data, task_data):
     """Run the full pipeline for a single user and print results."""
     from problem1 import compute_user_features, hashtag_to_domain
     from problem2_runner import compute_career_gap
-    from problem3_runner import (RankingModel, create_domain_matched_pairs,
-                                  engineer_user_features, engineer_task_features,
-                                  engineer_advanced_features, compute_rule_score,
-                                  generate_labels, recommend)
+    from problem3_runner import (RankingModel, engineer_task_features,
+                                  recommend_for_user)
     from problem4_runner import build_roadmap_for_user
 
     logger.info(f'Predicting for user: {user_id}')
@@ -157,18 +155,6 @@ def predict_for_user(user_id: str, user_data, task_data):
         bar = '█' * int(info['domain_alignment'] * 10) + '░' * (10 - int(info['domain_alignment'] * 10))
         print(f'    {dom:10s} {bar} {info["domain_alignment"]*100:.0f}% (need {info["required"]:.0f})')
 
-    # P3 — recommendations (rule-based for speed)
-    feat_df = pd.DataFrame([feats])
-    uf = engineer_user_features(urows)
-    tf = engineer_task_features(urows, task_data)
-    pairs = create_domain_matched_pairs(uf, tf)
-    if len(pairs) == 0:
-        print('\n  No task recommendations (no domain overlap with task catalog).')
-        return
-    pairs = engineer_advanced_features(pairs)
-    pairs = generate_labels(pairs)
-    pairs = compute_rule_score(pairs)
-
     # Load saved model if available
     model = None
     if config.RANKING_MODEL_FILE.exists():
@@ -177,7 +163,13 @@ def predict_for_user(user_id: str, user_data, task_data):
         except Exception:
             pass
 
-    recs = recommend(pairs, model, user_id, top_k=5)
+    # P3 — recommendations using real-time API
+    tf = engineer_task_features(user_data, task_data)
+    recs = recommend_for_user(feats, tf, model, top_k=5)
+
+    if len(recs) == 0:
+        print('\n  No task recommendations (no domain overlap with task catalog).')
+        return
 
     print('\n  TOP RECOMMENDATIONS:')
     if len(recs):
