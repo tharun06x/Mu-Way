@@ -26,7 +26,7 @@ import config
 from data_loader import DataLoader
 from problem1 import compute_user_features, hashtag_to_domain
 from problem2_runner import compute_career_gap
-from problem3_runner import RankingModel
+from problem3_runner import RankingModel, engineer_task_features, recommend_for_user
 from problem4_runner import build_roadmap_for_user
 
 
@@ -354,36 +354,9 @@ def generate_roadmap(muid: str, name: str, role: str,
         current = domain_levels.get(domain, 0)
         return max(1, min(current + 1, 4))
 
-    # ── Fix 2: Sort by domain priority then difficulty ──────── #
-    # Priority:  primary role domains first, general last
-    # Within domain: ascending difficulty starting from user's next level
-    def sort_key(row):
-        dom  = row['domain_mapped']
-        diff = int(row.get('difficulty_level', 2))
-        next_diff = next_difficulty(dom)
-        # Tasks below user's level penalised (push to end)
-        diff_score = diff if diff >= next_diff else diff + 10
-        return (diff_score, domain_priority.get(dom, 99))
-
-    if len(available):
-        available['_sort'] = available.apply(sort_key, axis=1)
-        available = available.sort_values('_sort').drop(columns=['_sort'])
-
-    # ── Attach popularity score for tie-breaking ─────────────── #
-    if known_user:
-        udata_for_pop = user_data.copy()
-        udata_for_pop['_task_key'] = udata_for_pop['task_name'].apply(_normalize_task_name)
-        pop = (udata_for_pop[~udata_for_pop['_task_key'].isin(done_tasks)]
-               .groupby('_task_key').size()
-               .reset_index(name='popularity'))
-        available = available.merge(pop, on='_task_key', how='left')
-        available['popularity'] = available['popularity'].fillna(0)
-    else:
-        # For cold-start, sort purely by difficulty within each domain
-        pop_map = user_data.groupby('task_name').size().to_dict()
-        available['popularity'] = available['task_name'].map(pop_map).fillna(0)
-
-    # ── Build recommendations DataFrame ─────────────────────── #
+    # ── Fix 2: ML Recommendations (Real-Time API) ───────────── #
+    tf = engineer_task_features(user_data, task_data)
+    
     # Load ML model if available for warm users
     model = None
     if known_user and config.RANKING_MODEL_FILE.exists():
@@ -392,47 +365,58 @@ def generate_roadmap(muid: str, name: str, role: str,
         except Exception:
             pass
 
-    total_subs = features.get('total_submissions', 0)
+    # Fetch all scored tasks for the user using the genuine ML engine
+    raw_recs = recommend_for_user(features, tf, model, top_k=9999)
+    if raw_recs.empty:
+        raw_recs = pd.DataFrame(columns=['task_name', 'domain', 'score', 'reason'])
 
-    # Score each available task
+    raw_recs['_task_key'] = raw_recs['task_name'].apply(_normalize_task_name)
+    
+    # ── Fix 3: Filter & Sort for Roadmap ────────────────────── #
+    # 1. Exclude already-done tasks
+    available = raw_recs[~raw_recs['_task_key'].isin(done_tasks)].copy()
+    
+    # 2. Filter to role domains only
+    available = available[available['domain'].isin(all_role_domains)].copy()
+    role_complete = known_user and len(role_tasks) > 0 and len(available) == 0
+
     records = []
-    for _, t in available.iterrows():
-        dom   = t['domain_mapped']
-        diff  = int(t.get('difficulty_level', 2))
-        req_mastery, weight = role_reqs.get(dom, (0.5, 0.1))
-        current_mastery     = mastery.get(dom, 0.0)
-        gap_score           = max(0.0, req_mastery - current_mastery)
+    if not available.empty:
+        # Attach difficulty for sorting and rendering
+        dmap = task_data.set_index('task_name')['difficulty_level'].to_dict()
+        available['difficulty_level'] = available['task_name'].map(dmap).fillna(2.0).astype(float)
+        
+        def sort_key(row):
+            dom  = row['domain']
+            diff = float(row.get('difficulty_level', 2.0))
+            next_diff = next_difficulty(dom)
+            diff_score = diff if diff >= next_diff else diff + 10
+            return diff_score
 
-        # Domain importance from role (primary domains score higher)
-        dom_importance = weight
-
-        # Difficulty suitability: gaussian peak at next level
-        next_d   = next_difficulty(dom)
-        suit     = float(np.exp(-0.5 * ((diff - next_d) ** 2)))
-
-        # Community signal
-        pop_norm = float(t.get('popularity', 0)) / max(float(available['popularity'].max()), 1)
-
-        score = (
-            0.40 * gap_score      +
-            0.25 * dom_importance +
-            0.20 * suit           +
-            0.15 * pop_norm
+        available['difficulty_order'] = available.apply(sort_key, axis=1)
+        available['domain_priority']  = available['domain'].map(domain_priority).fillna(99)
+        
+        # Sort by Domain Priority -> Difficulty Progression -> ML Score
+        available = available.sort_values(
+            ['domain_priority', 'difficulty_order', 'score'], 
+            ascending=[True, True, False]
         )
-
-        records.append({
-            'task_name':       t['task_name'],
-            '_task_key':       t['_task_key'],
-            'domain':          dom,
-            'difficulty_level': diff,
-            'difficulty_order': sort_key(t)[0],
-            'difficulty_label': DIFFICULTY_LABELS.get(diff, 'Intermediate'),
-            'domain_priority':  domain_priority.get(dom, 99),
-            'gap_score':       round(gap_score, 4),
-            'score':           round(score, 4),
-            'reason':          'ML-based' if (model and total_subs >= 5) else 'Rule-based',
-            'complexity':      {1:'Low', 2:'Medium', 3:'High', 4:'High'}.get(diff, 'Medium'),
-        })
+        
+        for _, t in available.iterrows():
+            diff = float(t['difficulty_level'])
+            records.append({
+                'task_name':        t['task_name'],
+                '_task_key':        t['_task_key'],
+                'domain':           t['domain'],
+                'difficulty_level': diff,
+                'difficulty_order': t['difficulty_order'],
+                'difficulty_label': DIFFICULTY_LABELS.get(int(diff), 'Intermediate'),
+                'domain_priority':  t['domain_priority'],
+                'gap_score':        max(0.0, role_reqs.get(t['domain'], (0.5, 0.1))[0] - mastery.get(t['domain'], 0.0)),
+                'score':            round(t['score'], 4),
+                'reason':           t['reason'],
+                'complexity':      {1:'Low', 2:'Medium', 3:'High', 4:'High'}.get(int(diff), 'Medium'),
+            })
 
     if not records:
         recs = pd.DataFrame()
