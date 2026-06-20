@@ -124,7 +124,7 @@ def create_domain_matched_pairs(
     pairs = uf.merge(tf, on='domain', how='inner')
 
     # Add default columns if missing
-    for col, val in [('difficulty_level', 2), ('community_approval', 0.5), ('difficulty', 0.5)]:
+    for col, val in [('difficulty_level', 2.0), ('community_approval', 0.5), ('difficulty', 0.5)]:
         if col not in pairs.columns:
             pairs[col] = val
 
@@ -332,11 +332,21 @@ def recommend(
     top_k: int = config.TOP_K_RECOMMENDATIONS,
 ) -> pd.DataFrame:
     """
-    Top-K recommendations for one user.
+    Top-K recommendations for one user from precomputed batch pairs.
     Uses ML score if ≥5 submissions, else rule-based score.
     """
-    up = pairs[pairs['user_id'] == user_id].copy()
-    if len(up) == 0:
+    # Optimize O(N) lookup by using index
+    if pairs.index.name != 'user_id' and 'user_id' in pairs.columns:
+        pairs = pairs.set_index('user_id')
+        
+    try:
+        # .loc[[user_id]] ensures it returns a DataFrame even for single row
+        up = pairs.loc[[user_id]].copy()
+    except KeyError:
+        logger.warning(f'No pairs for user {user_id}')
+        return pd.DataFrame()
+        
+    if up.empty:
         logger.warning(f'No pairs for user {user_id}')
         return pd.DataFrame()
 
@@ -350,6 +360,72 @@ def recommend(
         up['reason'] = 'Rule-based'
 
     top = up.nlargest(top_k, 'score')[['task_name', 'domain', 'score', 'reason']].reset_index(drop=True)
+    top.insert(0, 'rank', range(1, len(top) + 1))
+    return top
+
+
+# ─────────────────────────────────────────────────────────────────────────── #
+#  Real-Time Inference API                                                    #
+# ─────────────────────────────────────────────────────────────────────────── #
+
+def recommend_for_user(
+    user_dict: dict,
+    task_features: pd.DataFrame,
+    model: RankingModel,
+    top_k: int = config.TOP_K_RECOMMENDATIONS,
+) -> pd.DataFrame:
+    """
+    Real-time inference API for a single user without batch dataframe scans.
+    user_dict should be the output of problem1.py's get_user_features().
+    """
+    if not user_dict or task_features.empty:
+        return pd.DataFrame()
+
+    user_id = user_dict.get('user_id', 'unknown')
+    
+    uf_records = []
+    for dom in config.DOMAINS:
+        sub_count = user_dict.get(f'task_count_{dom}', 0)
+        if sub_count > 0:
+            uf_records.append({
+                'user_id': user_id,
+                'domain': dom,
+                'submission_count': sub_count,
+                'mastery': user_dict.get(f'mastery_{dom}', 0.0),
+                'gap_score': 1.0 - user_dict.get(f'mastery_{dom}', 0.0),
+                'approval_rate': user_dict.get('_approval_conf', 0.70), 
+                'optimal_difficulty': user_dict.get(f'optimal_diff_{dom}', 2.5),
+                'interest_score': 1.0, 
+            })
+            
+    uf = pd.DataFrame(uf_records)
+    if uf.empty:
+        uf = pd.DataFrame([{
+            'user_id': user_id,
+            'domain': 'general',
+            'submission_count': 0,
+            'mastery': 0.0,
+            'gap_score': 1.0,
+            'approval_rate': 0.70,
+            'optimal_difficulty': 1.5,
+            'interest_score': 1.0,
+        }])
+
+    pairs = create_domain_matched_pairs(uf, task_features)
+    pairs = engineer_advanced_features(pairs)
+    pairs = compute_rule_score(pairs)
+    
+    submission_count = uf['submission_count'].sum()
+    if (submission_count >= 5
+            and model is not None
+            and (model.model is not None or not SKLEARN_AVAILABLE)):
+        pairs['score'] = model.predict(pairs)
+        pairs['reason'] = 'ML-based' if model.model is not None else 'Rule-based fallback'
+    else:
+        pairs['score'] = pairs['rule_score']
+        pairs['reason'] = 'Rule-based'
+        
+    top = pairs.nlargest(top_k, 'score')[['task_name', 'domain', 'score', 'reason']].reset_index(drop=True)
     top.insert(0, 'rank', range(1, len(top) + 1))
     return top
 
