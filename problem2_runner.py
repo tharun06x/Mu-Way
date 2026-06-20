@@ -42,15 +42,17 @@ def get_gap_tier(gap: float) -> str:
     return 'MET'
 
 
-def infer_dream_role(user_id: str, feature_store: pd.DataFrame) -> str:
-    """Infer dream role from the domain where the user has the most activity."""
-    row = feature_store[feature_store['user_id'] == user_id]
-    if len(row) == 0:
+def infer_dream_role(user_features: dict) -> str:
+    """Infer dream role from a single user's feature dictionary."""
+    if not user_features:
         return 'Full Stack Developer'
 
-    row = row.iloc[0]
-    # Find domain with highest task_count
-    counts = {d: row.get(f'task_count_{d}', 0) for d in config.DOMAINS}
+    counts = {d: float(user_features.get(f'task_count_{d}', 0)) for d in config.DOMAINS}
+    
+    # If all domain counts are 0, it's a cold start user
+    if all(count == 0 for count in counts.values()):
+        return 'Full Stack Developer'
+        
     primary = max(counts, key=counts.get)
     return DOMAIN_TO_ROLE.get(primary, 'Full Stack Developer')
 
@@ -130,8 +132,9 @@ def run_skill_gap_pipeline(
 
     results = []
 
-    for _, row in feature_store.iterrows():
-        user_id = row['user_id']
+    for idx, row in feature_store.iterrows():
+        # Handle both indexed and non-indexed DataFrames safely
+        user_id = row.get('user_id', idx)
 
         # Extract mastery vector from feature store
         user_mastery = {
@@ -140,13 +143,7 @@ def run_skill_gap_pipeline(
         }
 
         # Determine dream role
-        role = dream_roles.get(user_id) or DOMAIN_TO_ROLE.get(
-            max(
-                {d: float(row.get(f'task_count_{d}', 0)) for d in config.DOMAINS},
-                key=lambda d: float(row.get(f'task_count_{d}', 0)),
-            ),
-            'Full Stack Developer',
-        )
+        role = dream_roles.get(user_id) or infer_dream_role(row.to_dict())
 
         gap = compute_career_gap(user_mastery, role)
         results.append({
