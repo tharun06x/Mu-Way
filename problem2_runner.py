@@ -130,33 +130,25 @@ def run_skill_gap_pipeline(
     if dream_roles is None:
         dream_roles = {}
 
-    results = []
-
-    for idx, row in feature_store.iterrows():
-        # Handle both indexed and non-indexed DataFrames safely
-        user_id = row.get('user_id', idx)
-
-        # Extract mastery vector from feature store
-        user_mastery = {
-            dom: float(row.get(f'mastery_{dom}', 0.0))
-            for dom in config.DOMAINS
-        }
-
-        # Determine dream role
-        role = dream_roles.get(user_id) or infer_dream_role(row.to_dict())
-
+    def process_user(row):
+        user_id = row.get('user_id', row.name)
+        user_dict = row.to_dict()
+        user_mastery = {dom: float(user_dict.get(f'mastery_{dom}', 0.0)) for dom in config.DOMAINS}
+        role = dream_roles.get(user_id) or infer_dream_role(user_dict)
+        
         gap = compute_career_gap(user_mastery, role)
-        results.append({
-            'user_id':          user_id,
-            'dream_role':       gap['dream_role'],
-            'career_gap':       gap['career_gap'],
-            'alignment_score':  gap['alignment_score'],
-            'readiness_pct':    gap['readiness_pct'],
-            'career_gap_tier':  gap['career_gap_tier'],
-            'domain_gaps_json': gap['domain_gaps_json'],
-        })
+        gap['user_id'] = user_id
+        return gap
 
-    df = pd.DataFrame(results)
+    if len(feature_store) > 0:
+        results_series = feature_store.apply(process_user, axis=1)
+        df = pd.DataFrame(results_series.tolist())
+        cols = ['user_id', 'dream_role', 'career_gap', 'alignment_score', 
+                'readiness_pct', 'career_gap_tier', 'domain_gaps_json']
+        df = df[[c for c in cols if c in df.columns]]
+    else:
+        df = pd.DataFrame(columns=['user_id', 'dream_role', 'career_gap', 'alignment_score',
+                                   'readiness_pct', 'career_gap_tier', 'domain_gaps_json'])
     logger.info(
         f"✓ Career gaps computed | "
         f"Tier distribution:\n{df['career_gap_tier'].value_counts().to_string()}"
