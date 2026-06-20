@@ -386,7 +386,8 @@ def recommend_for_user(
     uf_records = []
     for dom in config.DOMAINS:
         sub_count = user_dict.get(f'task_count_{dom}', 0)
-        if sub_count > 0:
+        interest  = user_dict.get(f'interest_{dom}', 0.0)
+        if sub_count > 0 or interest > 0.0:
             uf_records.append({
                 'user_id': user_id,
                 'domain': dom,
@@ -395,7 +396,7 @@ def recommend_for_user(
                 'gap_score': 1.0 - user_dict.get(f'mastery_{dom}', 0.0),
                 'approval_rate': user_dict.get('_approval_conf', 0.70), 
                 'optimal_difficulty': user_dict.get('optimal_difficulty', 1.5),
-                'interest_score': 1.0, 
+                'interest_score': interest if interest > 0.0 else 1.0, 
             })
             
     uf = pd.DataFrame(uf_records)

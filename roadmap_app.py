@@ -305,7 +305,7 @@ def generate_roadmap(muid: str, name: str, role: str,
 
     if known_user:
         rows['domain_mapped'] = rows['domain'].apply(hashtag_to_domain)
-        features = compute_user_features(muid, rows, task_data=task_data)
+        features = compute_user_features(muid, rows, ref=pd.Timestamp.now())
     else:
         features = _cold_start_features(muid)
 
@@ -317,6 +317,11 @@ def generate_roadmap(muid: str, name: str, role: str,
     role_reqs        = config.ROLE_REQUIREMENTS[role]
     all_role_domains = list(role_reqs.keys())          # includes general
     domain_priority  = {domain: idx for idx, domain in enumerate(all_role_domains)}
+    
+    # Inject maximum interest for all domains required by the target role
+    # This forces the ML engine to generate pairs and score tasks for these domains
+    for d in all_role_domains:
+        features[f'interest_{d}'] = 1.0
 
     # Map every task to a canonical domain
     td = task_data.copy()

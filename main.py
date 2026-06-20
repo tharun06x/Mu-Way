@@ -134,7 +134,7 @@ def predict_for_user(user_id: str, user_data, task_data):
     urows = urows.copy()
     urows['domain_mapped'] = urows['domain'].apply(hashtag_to_domain)
 
-    feats = compute_user_features(user_id, urows, task_data=task_data)
+    feats = compute_user_features(user_id, urows, ref=pd.Timestamp.now())
     mastery = {d: feats[f'mastery_{d}'] for d in config.DOMAINS}
 
     # P2 — gap
