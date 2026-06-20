@@ -394,7 +394,7 @@ def recommend_for_user(
                 'mastery': user_dict.get(f'mastery_{dom}', 0.0),
                 'gap_score': 1.0 - user_dict.get(f'mastery_{dom}', 0.0),
                 'approval_rate': user_dict.get('_approval_conf', 0.70), 
-                'optimal_difficulty': user_dict.get(f'optimal_diff_{dom}', 2.5),
+                'optimal_difficulty': user_dict.get('optimal_difficulty', 1.5),
                 'interest_score': 1.0, 
             })
             
