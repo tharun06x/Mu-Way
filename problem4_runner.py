@@ -22,7 +22,7 @@ import config
 
 logger = logging.getLogger(__name__)
 
-MINUTES_PER_WEEK = getattr(config, 'MINUTES_PER_WEEK', 180) ##(new)
+HOURS_PER_WEEK    = config.HOURS_PER_WEEK     # 3
 MAX_WEEKS         = config.MAX_ROADMAP_WEEKS   # 16
 TASK_HOURS        = {'Low': 1, 'Medium': 2, 'High': 3}  # estimated hrs per complexity
 
@@ -77,12 +77,13 @@ def _enforce_difficulty_progression(tasks: pd.DataFrame) -> pd.DataFrame:
 
     for _, row in tasks.iterrows():
         dom  = row['domain']
-        diff = int(row.get('difficulty_level', 2))
-        last = last_diff_by_domain.get(dom)
+        diff_float = float(row.get('difficulty_level', 2.0))
+        diff_tier = int(diff_float)
+        last_tier = last_diff_by_domain.get(dom)
 
-        if last is None or (diff >= last and diff <= last + 1):
+        if last_tier is None or (diff_tier >= last_tier and diff_tier <= last_tier + 1):
             kept.append(row)
-            last_diff_by_domain[dom] = diff
+            last_diff_by_domain[dom] = diff_tier
 
     return pd.DataFrame(kept).reset_index(drop=True)
 
@@ -93,41 +94,45 @@ def _enforce_difficulty_progression(tasks: pd.DataFrame) -> pd.DataFrame:
 
 def _schedule_weeks(tasks: pd.DataFrame) -> list:
     """
-    Pack tasks into weekly slots using precise minute budgeting.
+    Pack tasks into weekly slots (3 hrs/week budget, max 16 weeks).
+
+    Returns:
+        list of dicts — {week, tasks: [{task_name, domain, urgency_tier, ...}]}
     """
     weeks        = []
-    current_week = {'week': 1, 'minutes_used': 0, 'tasks': []}
+    current_week = {'week': 1, 'hours_used': 0, 'tasks': []}
 
     for _, row in tasks.iterrows():
-        # Get the parsed minutes (default to 60 if missing)
-        task_mins = int(row.get('estimated_minutes', 60))
+        task_hrs = TASK_HOURS.get(
+            str(row.get('complexity', 'Medium')).strip().capitalize(),
+            2,
+        )
 
-        # If adding this task exceeds the week's budget, start a new week
-        if current_week['minutes_used'] + task_mins > MINUTES_PER_WEEK:
+        if current_week['hours_used'] + task_hrs > HOURS_PER_WEEK:
             weeks.append(current_week)
             if len(weeks) >= MAX_WEEKS:
                 return weeks
             current_week = {
                 'week': len(weeks) + 1,
-                'minutes_used': 0,
+                'hours_used': 0,
                 'tasks': [],
             }
 
-        # Add task to the current week
         current_week['tasks'].append({
-            'task_name':        row.get('task_name', ''),
-            'domain':           row.get('domain', ''),
-            'urgency_tier':     row.get('urgency_tier', 'MODERATE'),
-            'difficulty_level': int(row.get('difficulty_level', 2)),
-            'estimated_mins':   task_mins,  # Save this so UI can show it!
-            'score':            round(float(row.get('score', 0.0)), 4),
+            'task_name':    row.get('task_name', ''),
+            'domain':       row.get('domain', ''),
+            'urgency_tier': row.get('urgency_tier', 'MODERATE'),
+            'difficulty_level': float(row.get('difficulty_level', 2.0)),
+            'difficulty_order': float(row.get('difficulty_order', row.get('difficulty_level', 2.0))),
+            'score':        round(float(row.get('score', 0.0)), 4),
         })
-        current_week['minutes_used'] += task_mins
+        current_week['hours_used'] += task_hrs
 
     if current_week['tasks']:
         weeks.append(current_week)
 
     return weeks
+
 
 # ─────────────────────────────────────────────────────────────────────────── #
 #  Roadmap Health Score                                                       #
@@ -159,11 +164,23 @@ def _health_score(weeks: list, domain_gaps: dict) -> float:
 
 def build_roadmap_for_user(
     user_id: str,
-    gap_row: pd.Series,
+    gap_row: dict | pd.Series,
     recommendations: pd.DataFrame,
     task_data: pd.DataFrame = None,
 ) -> dict:
-    """Build a complete week-by-week roadmap for one user."""
+    """
+    Build a complete week-by-week roadmap for one user.
+
+    Args:
+        user_id        : identifier
+        gap_row        : row from career_gap_df
+        recommendations: ranked tasks from Problem 3 for this user
+        task_data      : task catalog (for complexity/hours)
+
+    Returns:
+        dict  — complete roadmap
+    """
+    # Parse domain gaps
     dg_raw = gap_row.get('domain_gaps_json', '{}')
     try:
         domain_gaps = json.loads(dg_raw) if isinstance(dg_raw, str) else dg_raw
@@ -183,68 +200,47 @@ def build_roadmap_for_user(
             'roadmap_health':     0.0,
             'domain_gaps':        domain_gaps,
             'summary': {
-                'total_weeks': 0, 'total_tasks': 0, 'health_score': 0.0, 'health_ok': False,
+                'total_weeks': 0,
+                'total_tasks': 0,
+                'health_score': 0.0,
+                'health_ok': False,
                 'first_week_domains': [],
-                'next_milestone': {'description': 'No remaining role-matched tasks found.'},
+                'next_milestone': {
+                    'description': 'No remaining role-matched tasks found.',
+                },
             },
         }
 
-    # Attach task complexity, difficulty, and time from catalog
+    # Attach task complexity from catalog
     recs = recommendations.copy()
     recs['_task_key'] = recs['task_name'].apply(_normalize_task_name)
     recs = recs.drop_duplicates('_task_key')
-    
-    if task_data is not None:
-        if 'complexity' not in recs.columns and 'complexity' in task_data.columns:
-            cmap = task_data.set_index('task_name')['complexity'].to_dict()
-            recs['complexity'] = recs['task_name'].map(cmap).fillna('Medium')
-            
-        if 'difficulty_level' not in recs.columns and 'difficulty_level' in task_data.columns:
-            dmap = task_data.set_index('task_name')['difficulty_level'].to_dict()
-            recs['difficulty_level'] = recs['task_name'].map(dmap).fillna(2).astype(int)
-            
-        if 'estimated_minutes' not in recs.columns and 'estimated_minutes' in task_data.columns:
-            mmap = task_data.set_index('task_name')['estimated_minutes'].to_dict()
-            recs['estimated_minutes'] = recs['task_name'].map(mmap).fillna(60).astype(int)
+    if task_data is not None and 'complexity' not in recs.columns:
+        cmap = task_data.set_index('task_name')['complexity'].to_dict() if 'complexity' in task_data.columns else {}
+        recs['complexity'] = recs['task_name'].map(cmap).fillna('Medium')
+        dmap = task_data.set_index('task_name')['difficulty_level'].to_dict()
+        recs['difficulty_level'] = recs['task_name'].map(dmap).fillna(2.0).astype(float)
 
-    # Step 1: Urgency tiering
+    # Step 1: urgency tiering
     recs = _assign_urgency(recs, domain_gaps)
-    
-    # Step 1.5: Prerequisite Depth Mapping (Forces foundational domains to be scheduled first)
-    prereqs = getattr(config, 'DOMAIN_PREREQUISITES', {})
-    
-    ##(New function added in 2024-06-05)
-    def get_depth(dom, visited=None):
-        if visited is None: visited = set()
-        if dom in visited: return 0  # Safety against circular dependencies
-        visited.add(dom)
-        
-        reqs = prereqs.get(dom, [])
-        if not reqs: return 0
-        return 1 + max(get_depth(r, set(visited)) for r in reqs)
-
-    # Apply the dynamic calculation
-    recs['domain_depth'] = recs['domain'].apply(lambda d: get_depth(d))
-
-    # Sort logic: Urgency > Depth > Priority > Difficulty > Score (New)
-    sort_cols = [c for c in ['urgency_order', 'domain_depth', 'domain_priority',
+    sort_cols = [c for c in ['urgency_order', 'domain_priority',
                              'difficulty_order', 'difficulty_level', 'score']
                  if c in recs.columns]
-    
-    ascending = [True, True, True, True, True, False][:len(sort_cols)]
+    ascending = [True, True, True, True, False][:len(sort_cols)]
     recs = recs.sort_values(sort_cols, ascending=ascending)
 
-    # Step 2: Difficulty progression constraint
+    # Step 2: difficulty progression constraint
     recs = _enforce_difficulty_progression(recs)
 
     if len(recs) == 0:
         weeks = []
     else:
-        # Step 3: Week-by-week scheduling
+        # Step 3: week-by-week scheduling
         weeks = _schedule_weeks(recs)
 
-    # Step 4: Health score
+    # Step 4: health score
     health = _health_score(weeks, domain_gaps)
+
     first_task = weeks[0]['tasks'][0] if weeks and weeks[0]['tasks'] else None
 
     return {
@@ -272,6 +268,7 @@ def build_roadmap_for_user(
             },
         },
     }
+
 
 # ─────────────────────────────────────────────────────────────────────────── #
 #  Full Pipeline                                                              #
@@ -351,6 +348,326 @@ def save_roadmaps(roadmaps: list, path=None) -> dict:
     logger.info(f'✓ Roadmaps saved → {path}')
     return summary
 
+# ─────────────────────────────────────────────────────────────────────────── #
+#  Failure Adaptation                                                         #
+# ─────────────────────────────────────────────────────────────────────────── #
+
+class FailureAdapter:
+    """
+    Tracks per-user task failures and adapts the roadmap accordingly.
+
+    Rules (spec):
+      3 failures → insert bridge task (difficulty - 1) before failed task
+      5 failures → remove task entirely, mark domain as downgraded
+    """
+
+    def __init__(self):
+        self.failure_counts:  dict = {}   # {user_id: {task_name: count}}
+        self.degraded_domains: dict = {}  # {user_id: set of domain strings}
+        self.action_log:      list = []
+
+    def _log(self, message: str):
+        entry = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}"
+        self.action_log.append(entry)
+        logger.info(entry)
+
+    def record_failure(self, user_id: str, task_name: str, roadmap: dict) -> dict:
+        """
+        Record one failure for a task and adapt roadmap if threshold is hit.
+
+        Args:
+            user_id   : user identifier
+            task_name : name of the failed task
+            roadmap   : full roadmap dict returned by build_roadmap_for_user()
+
+        Returns:
+            Modified roadmap dict.
+        """
+        if user_id not in self.failure_counts:
+            self.failure_counts[user_id] = {}
+        self.failure_counts[user_id][task_name] = (
+            self.failure_counts[user_id].get(task_name, 0) + 1
+        )
+        count = self.failure_counts[user_id][task_name]
+
+        # Locate the task inside roadmap_weeks
+        task_week = None
+        task_idx  = None
+        task_obj  = None
+        for week in roadmap.get('roadmap_weeks', []):
+            for i, t in enumerate(week['tasks']):
+                if t['task_name'] == task_name:
+                    task_week = week
+                    task_idx  = i
+                    task_obj  = t
+                    break
+            if task_week is not None:
+                break
+
+        if task_obj is None:
+            self._log(f"Task '{task_name}' not found in roadmap for {user_id}")
+            return roadmap
+
+        domain     = task_obj['domain']
+        difficulty = int(task_obj.get('difficulty_level', 2))
+
+        if count == 3:
+            bridge = {
+                'task_name':        f'[Bridge] {domain.upper()} Foundations',
+                'domain':           domain,
+                'urgency_tier':     'BRIDGE',
+                'difficulty_level': max(1, difficulty - 1),
+                'difficulty_order': max(1, difficulty - 1),
+                'score':            0.0,
+                'is_bridge':        True,
+            }
+            task_week['tasks'].insert(task_idx, bridge)
+            self._log(
+                f"Bridge task inserted before '{task_name}' for {user_id} "
+                f"after 3 failures (domain={domain}, difficulty={max(1, difficulty - 1)})"
+            )
+
+        elif count >= 5:
+            task_week['tasks'].remove(task_obj)
+            if not task_week['tasks']:
+                roadmap['roadmap_weeks'].remove(task_week)
+
+            if user_id not in self.degraded_domains:
+                self.degraded_domains[user_id] = set()
+            self.degraded_domains[user_id].add(domain)
+
+            self._log(
+                f"Task '{task_name}' removed for {user_id} after 5 failures. "
+                f"Domain '{domain}' marked as downgraded."
+            )
+
+        return roadmap
+
+    def get_status(self, user_id: str, task_name: str) -> dict:
+        """Return failure count and latest action for a task."""
+        count = self.failure_counts.get(user_id, {}).get(task_name, 0)
+        return {
+            'user_id':       user_id,
+            'task_name':     task_name,
+            'failure_count': count,
+            'action_taken':  (
+                'task_removed'    if count >= 5
+                else 'bridge_inserted' if count >= 3
+                else 'none'
+            ),
+            'log': [e for e in self.action_log if task_name in e and user_id in e],
+        }
+
+    def is_domain_degraded(self, user_id: str, domain: str) -> bool:
+        """Check whether a domain has been downgraded for a user."""
+        return domain in self.degraded_domains.get(user_id, set())
+
+# ─────────────────────────────────────────────────────────────────────────── #
+#  Revision Triggers                                                          #
+# ─────────────────────────────────────────────────────────────────────────── #
+
+class RoadmapRevisionEngine:
+    """
+    Event-driven roadmap revision triggers.
+
+    Triggers (spec):
+      - Inactivity    : ≥ 14 days no submission → shorten roadmap
+      - Mastery surge : domain mastery delta ≥ 0.20 → skip ahead in that domain
+      - Role change   : dream role updated → full regeneration required
+      - Scheduled     : weekly refresh → rebuild from updated ranked list
+    """
+
+    def __init__(self):
+        self.version:    int  = 1
+        self.change_log: list = []
+
+    def _log(self, message: str):
+        entry = f"[v{self.version}] [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}"
+        self.change_log.append(entry)
+        logger.info(entry)
+
+    def _increment_version(self):
+        self.version += 1
+
+    # ------------------------------------------------------------------ #
+
+    def handle_inactivity(self, roadmap: dict, days_inactive: int) -> dict:
+        """
+        Triggered when a user has not submitted for ≥ 14 days.
+
+        Action:
+          - Remove the last 3 tasks from the roadmap
+          - Prepend one easy re-engagement task to Week 1
+        """
+        if days_inactive < 14:
+            return roadmap
+
+        roadmap = _deep_copy_roadmap(roadmap)
+        weeks   = roadmap.get('roadmap_weeks', [])
+
+        # Remove last 3 tasks working backwards through weeks
+        removed = 0
+        for week in reversed(weeks):
+            while week['tasks'] and removed < 3:
+                week['tasks'].pop()
+                removed += 1
+            if removed == 3:
+                break
+
+        # Drop empty weeks
+        roadmap['roadmap_weeks'] = [w for w in weeks if w['tasks']]
+
+        # Prepend easy re-engagement task to Week 1
+        if roadmap['roadmap_weeks']:
+            first_week   = roadmap['roadmap_weeks'][0]
+            first_domain = first_week['tasks'][0]['domain'] if first_week['tasks'] else 'general'
+            reengagement = {
+                'task_name':        f'[Re-engagement] {first_domain.upper()} Refresher',
+                'domain':           first_domain,
+                'urgency_tier':     'REENGAGEMENT',
+                'difficulty_level': 1,
+                'difficulty_order': 1,
+                'score':            0.0,
+                'is_bridge':        False,
+            }
+            first_week['tasks'].insert(0, reengagement)
+
+        roadmap['total_weeks'] = len(roadmap['roadmap_weeks'])
+        self._log(
+            f"Inactivity trigger fired for {roadmap['user_id']} "
+            f"({days_inactive} days). Removed {removed} tasks, added re-engagement task."
+        )
+        self._increment_version()
+        return roadmap
+
+    # ------------------------------------------------------------------ #
+
+    def handle_mastery_surge(
+        self,
+        roadmap: dict,
+        domain: str,
+        mastery_increase: float,
+    ) -> dict:
+        """
+        Triggered when a user's mastery in a domain increases by ≥ 0.20
+        within a 7-day window (after Problem 1 recomputes features).
+
+        Action:
+          - Remove all tasks in that domain where difficulty_level ≤
+            the scaled new mastery level (mastery 0–1 → difficulty 1–4)
+        """
+        if mastery_increase < 0.20:
+            return roadmap
+
+        roadmap        = _deep_copy_roadmap(roadmap)
+        threshold_diff = max(1, round(mastery_increase * 4))
+        removed_count  = 0
+
+        for week in roadmap.get('roadmap_weeks', []):
+            before = len(week['tasks'])
+            week['tasks'] = [
+                t for t in week['tasks']
+                if not (
+                    t['domain'] == domain
+                    and int(t.get('difficulty_level', 2)) <= threshold_diff
+                )
+            ]
+            removed_count += before - len(week['tasks'])
+
+        # Drop empty weeks and re-number
+        non_empty = [w for w in roadmap['roadmap_weeks'] if w['tasks']]
+        for i, w in enumerate(non_empty, start=1):
+            w['week'] = i
+        roadmap['roadmap_weeks'] = non_empty
+        roadmap['total_weeks']   = len(non_empty)
+
+        self._log(
+            f"Mastery surge in '{domain}' for {roadmap['user_id']} "
+            f"(+{mastery_increase:.2f}). Removed {removed_count} tasks "
+            f"at difficulty ≤ {threshold_diff}."
+        )
+        self._increment_version()
+        return roadmap
+
+    # ------------------------------------------------------------------ #
+
+    def handle_role_change(self, roadmap: dict, new_role: str) -> None:
+        """
+        Triggered when a user updates their dream role.
+
+        Action:
+          - Returns None — signals to the caller that a full roadmap
+            regeneration is required. The caller must rebuild from scratch
+            using the new role.
+        """
+        self._log(
+            f"Role change for {roadmap['user_id']}: "
+            f"'{roadmap.get('dream_role')}' → '{new_role}'. "
+            f"Full regeneration required."
+        )
+        self._increment_version()
+        return None
+
+    # ------------------------------------------------------------------ #
+
+    def handle_scheduled_refresh(
+        self,
+        roadmap: dict,
+        fresh_recs: pd.DataFrame,
+        gap_row: dict | pd.Series,
+        task_data: pd.DataFrame = None,
+        top_k: int = 20,
+    ) -> dict:
+        """
+        Triggered every 7 days (scheduled cron).
+
+        Action:
+          - Rebuild roadmap from scratch using the fresh real-time recommendations
+            and gap data. Preserves user_id and dream_role.
+        """
+        user_id   = roadmap['user_id']
+        score_col = 'final_score' if 'final_score' in fresh_recs.columns else 'rule_score'
+        rec_cols  = ['task_name', 'domain', score_col]
+        for col in ['difficulty_level', 'difficulty_order', 'domain_priority', 'complexity']:
+            if col in fresh_recs.columns:
+                rec_cols.append(col)
+
+        if len(fresh_recs) == 0:
+            self._log(f"Scheduled refresh skipped for {user_id}: no fresh recommendations found.")
+            return roadmap
+
+        recs = (
+            fresh_recs.nlargest(top_k, score_col)[rec_cols]
+            .rename(columns={score_col: 'score'})
+        )
+
+        new_roadmap = build_roadmap_for_user(user_id, gap_row, recs, task_data)
+
+        self._log(
+            f"Scheduled refresh completed for {user_id}. "
+            f"New roadmap: {new_roadmap['total_weeks']} weeks, "
+            f"health={new_roadmap['roadmap_health']}."
+        )
+        self._increment_version()
+        return new_roadmap
+
+    # ------------------------------------------------------------------ #
+
+    def get_log(self) -> list:
+        """Return the full change log for this engine instance."""
+        return self.change_log
+
+
+# ─────────────────────────────────────────────────────────────────────────── #
+#  Internal Helper                                                            #
+# ─────────────────────────────────────────────────────────────────────────── #
+
+def _deep_copy_roadmap(roadmap: dict) -> dict:
+    """
+    Return a deep copy of a roadmap dict so mutations don't affect
+    the original. Uses JSON round-trip for safety.
+    """
+    return json.loads(json.dumps(roadmap, default=str))
 
 # ─────────────────────────────────────────────────────────────────────────── #
 #  Standalone run                                                             #
