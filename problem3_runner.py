@@ -99,6 +99,7 @@ def engineer_task_features(
         tf['domain'] = tf['domain'].apply(
             lambda x: hashtag_to_domain(x) if pd.notna(x) else 'general'
         )
+        tf = tf[tf['domain'] != 'ignored'].copy()
     else:
         tf['domain'] = 'general'
 

@@ -30,7 +30,12 @@ BAYESIAN_PRIOR_TOTAL     = 4     # pseudo-total attempts
 BAYESIAN_PRIOR_TASK_WEIGHT = 20  # fake attempts for task empirical difficulty
 WARM_UP_THRESHOLD        = 5     # min submissions before full ML pipeline
 
-DOMAINS = ['ai', 'ds', 'web', 'dsa', 'devops', 'cybersec', 'android', 'general']
+DOMAINS = [
+    'ai', 'genai', 'data_science', 'data_analytics', 'data_eng',
+    'web_dev', 'mobile', 'devops', 'cybersec',
+    'dsa', 'game_dev', 'quantum_comp', 'blockchain', 'iot',
+    'ux', 'low_code', 'product', 'business', 'general'
+]
 
 # Load taxonomy from YAML
 TAXONOMY_FILE = DATA_DIR / "config" / "taxonomy.yaml"
@@ -38,7 +43,7 @@ try:
     with open(TAXONOMY_FILE, 'r') as f:
         _taxonomy = yaml.safe_load(f)
         
-        # Invert the mapping: from { 'ai': ['ai', 'ml', ...] } to { 'ml': 'ai', 'ai': 'ai' }
+        # Invert the mapping: from { 'ml': ['ai', 'ml', ...] } to { 'ml': 'ml', 'ai': 'ml' }
         DOMAIN_TOKEN_MAP = {}
         if 'domain_token_map' in _taxonomy:
             for domain, tokens in _taxonomy['domain_token_map'].items():
@@ -58,213 +63,142 @@ GAP_TIER_CRITICAL = 0.04
 GAP_TIER_MODERATE = 0.01
 GAP_TIER_MARGINAL = 0.001
 
-# ROLE_REQUIREMENTS = {
-
-#     # Data Scientist — ds and ai are the core, dsa is light foundation
-#     'Data Scientist': {
-#         'ds':      (0.85, 0.45),   # primary — EDA, stats, modelling
-#         'ai':      (0.75, 0.35),   # important — ML algorithms
-#         'dsa':     (0.50, 0.10),   # supporting — basic coding efficiency
-#         'general': (0.40, 0.10),   # foundation
-#     },
-
-#     # AI Engineer — ai dominates, ds is close second, dsa minor
-#     'AI Engineer': {
-#         'ai':      (0.90, 0.55),   # primary
-#         'ds':      (0.70, 0.30),   # secondary
-#         'dsa':     (0.45, 0.08),   # light foundation
-#         'general': (0.40, 0.07),
-#     },
-
-#     # Web Developer — web is everything, dsa is just light background
-#     'Web Developer': {
-#         'web':     (0.80, 0.70),   # primary
-#         'dsa':     (0.35, 0.10),   # light background (basic problem solving)
-#         'general': (0.40, 0.20),
-#     },
-
-#     # Full Stack Developer — web leads, dsa is supporting
-#     'Full Stack Developer': {
-#         'web':     (0.80, 0.60),   # primary
-#         'dsa':     (0.40, 0.15),   # supporting
-#         'general': (0.40, 0.25),
-#     },
-
-#     # Frontend Developer — web almost entirely, dsa minimal
-#     'Frontend Developer': {
-#         'web':     (0.85, 0.75),   # primary
-#         'dsa':     (0.30, 0.08),   # very light (basic logic only)
-#         'general': (0.40, 0.17),
-#     },
-
-#     # Backend Developer — only role where DSA is truly co-equal
-#     'Backend Developer': {
-#         'web':     (0.70, 0.40),   # backend APIs, DB
-#         'dsa':     (0.70, 0.40),   # algorithms genuinely matter here
-#         'general': (0.40, 0.20),
-#     },
-
-#     # DevOps — no DSA needed, infra and scripting dominate
-#     'DevOps Engineer': {
-#         'devops':  (0.80, 0.65),   # primary
-#         'web':     (0.50, 0.25),   # scripting, APIs
-#         'general': (0.40, 0.10),
-#     },
-
-#     # Android — android SDK dominates, dsa is light
-#     'Android Developer': {
-#         'android': (0.80, 0.70),   # primary
-#         'dsa':     (0.40, 0.12),   # supporting
-#         'general': (0.40, 0.18),
-#     },
-
-#     # Security Engineer — cybersec dominates, dsa very light
-#     'Security Engineer': {
-#         'cybersec': (0.80, 0.72),  # primary
-#         'dsa':      (0.35, 0.10),  # light (scripting, basic logic)
-#         'general':  (0.40, 0.18),
-#     },
-# }
-
 ROLE_REQUIREMENTS = {
-
-    # Data Scientist
-    'Data Scientist': {
-        'ds':      (0.90, 0.50),   # primary — EDA, stats, predictive modelling
-        'ai':      (0.65, 0.25),   # secondary — basic ML algorithms
-        'web':     (0.40, 0.15),   # Building data dashboards (Streamlit, Gradio)
-        'devops':  (0.35, 0.10),   # Basic Docker/Airflow for data pipelines
-        'dsa':     (0.40, 0.10),   # supporting — pandas/numpy optimization
-        'general': (0.40, 0.10),
-    },
-
-    # AI Engineer
     'AI Engineer': {
-        'ai':      (0.90, 0.55),   # primary — deep learning, NLP, CV
-        'ds':      (0.65, 0.25),   # secondary — data prep
-        'dsa':     (0.60, 0.20),   # secondary — pipeline efficiency
-        'devops':  (0.40, 0.15),   # MLOps, Docker, Cloud model deployment
-        'web':     (0.30, 0.10),   # Building FastAPI/Flask endpoints for the models
-        'general': (0.40, 0.07),
+        'ai':            (0.90, 0.50),
+        'genai':         (0.85, 0.45),
+        'data_eng':      (0.50, 0.20),
+        'devops':        (0.40, 0.15),
+        'general':       (0.40, 0.10),
     },
-
-    # Web Developer
-    'Web Developer': {
-        'web':      (0.85, 0.65),  # primary
-        'dsa':      (0.40, 0.10),  # basic logic
-        'cybersec': (0.30, 0.10),  # Basic OWASP, XSS prevention
-        'devops':   (0.30, 0.10),  # Basic hosting concepts (Vercel/Netlify/DNS)
-        'android':  (0.25, 0.05),  # ADDED: Mobile web testing & Progressive Web Apps (PWAs)
-        'general':  (0.40, 0.15),
+    'Data Scientist': {
+        'data_science':  (0.90, 0.50),
+        'data_analytics':(0.85, 0.45),
+        'data_eng':      (0.60, 0.20),
+        'general':       (0.40, 0.10),
     },
-
-    # Full Stack Developer
     'Full Stack Developer': {
-        'web':      (0.85, 0.60),  # primary
-        'dsa':      (0.50, 0.20),  # supporting
-        'devops':   (0.45, 0.15),  # Docker, CI/CD, Server management
-        'cybersec': (0.40, 0.15),  # Auth (JWT/OAuth), Data protection
-        'android':  (0.25, 0.05),  # ADDED: Cross-platform context (React Native/Ionic)
-        'general':  (0.40, 0.15),
+        'web_dev':       (0.90, 0.60),
+        'devops':        (0.50, 0.20),
+        'general':       (0.40, 0.10),
     },
-
-    # Frontend Developer
-    'Frontend Developer': {
-        'web':      (0.90, 0.70),  # primary
-        'dsa':      (0.35, 0.10),  # DOM manipulation logic
-        'cybersec': (0.25, 0.05),  # CORS, CSRF, Client-side auth security
-        'android':  (0.20, 0.05),  # ADDED: Mobile UI/UX constraints
-        'general':  (0.40, 0.15),
+    'Mobile Developer': {
+        'mobile':        (0.90, 0.65),
+        'web_dev':       (0.45, 0.20),
+        'general':       (0.40, 0.10),
     },
-
-    # Backend Developer
-    'Backend Developer': {
-        'web':      (0.75, 0.45),  # APIs, DB design
-        'dsa':      (0.75, 0.40),  # Algorithms genuinely matter here
-        'devops':   (0.45, 0.15),  # Containerization, Server configs
-        'cybersec': (0.40, 0.15),  # Encryption, API security (Rate limiting)
-        'general':  (0.40, 0.10),
-    },
-
-    # DevOps Engineer
     'DevOps Engineer': {
-        'devops':   (0.90, 0.65),  # primary
-        'cybersec': (0.50, 0.20),  # Infrastructure security (IAM, VPCs, Firewalls)
-        'web':      (0.45, 0.15),  # Automation scripts, server monitoring UIs
-        'dsa':      (0.30, 0.05),  # Scripting efficiency
-        'general':  (0.40, 0.10),
+        'devops':        (0.90, 0.65),
+        'web_dev':       (0.50, 0.20),
+        'cybersec':      (0.45, 0.15),
+        'general':       (0.40, 0.10),
     },
-
-    # Android Developer
-    'Android Developer': {
-        'android':  (0.85, 0.65),  # primary
-        'web':      (0.40, 0.15),  # REST APIs, Firebase integrations
-        'dsa':      (0.45, 0.15),  # Memory management, async processing
-        'cybersec': (0.35, 0.10),  # Secure local storage, OAuth, Code obfuscation
-        'devops':   (0.25, 0.05),  # CI/CD (Fastlane, Play Store deployment pipelines)
-        'general':  (0.40, 0.10),
-    },
-
-    # Security Engineer
     'Security Engineer': {
-        'cybersec': (0.90, 0.65),  # primary
-        'web':      (0.55, 0.25),  # Web App PenTesting (SQLi, XSS)
-        'devops':   (0.50, 0.20),  # Cloud/Network Security, misconfigurations
-        'dsa':      (0.40, 0.15),  # Scripting, Malware Analysis
-        'android':  (0.35, 0.10),  # ADDED: Mobile App Penetration Testing (APK reversing)
-        'general':  (0.40, 0.10),
+        'cybersec':      (0.90, 0.65),
+        'web_dev':       (0.50, 0.25),
+        'devops':        (0.50, 0.20),
+        'general':       (0.40, 0.10),
     },
+    'Game Developer': {
+        'game_dev':      (0.90, 0.65),
+        'dsa':           (0.60, 0.30),
+        'general':       (0.40, 0.10),
+    },
+    'UI/UX Designer': {
+        'ux':            (0.90, 0.65),
+        'web_dev':       (0.40, 0.20),
+        'general':       (0.40, 0.10),
+    },
+    'Blockchain Developer': {
+        'blockchain':    (0.90, 0.65),
+        'web_dev':       (0.50, 0.25),
+        'cybersec':      (0.40, 0.15),
+        'general':       (0.40, 0.10),
+    },
+    'IoT Engineer': {
+        'iot':           (0.90, 0.65),
+        'devops':        (0.45, 0.20),
+        'web_dev':       (0.40, 0.15),
+        'general':       (0.40, 0.10),
+    },
+    'Product Manager': {
+        'product':       (0.90, 0.60),
+        'business':      (0.70, 0.40),
+        'ux':            (0.40, 0.15),
+        'general':       (0.40, 0.10),
+    },
+    'Quantum Researcher': {
+        'quantum_comp':  (0.90, 0.60),
+        'dsa':           (0.50, 0.20),
+        'ai':            (0.40, 0.15),
+        'general':       (0.40, 0.10),
+    }
 }
 
 DOMAIN_TO_ROLE = {
-    'ai':      'AI Engineer',
-    'ds':      'Data Scientist',
-    'web':     'Full Stack Developer',
-    'android': 'Android Developer',
-    'devops':  'DevOps Engineer',
-    'cybersec':'Security Engineer',
-    'dsa':     'Backend Developer',
-    'general': 'Full Stack Developer',
+    'ai':            'AI Engineer',
+    'genai':         'AI Engineer',
+    'data_science':  'Data Scientist',
+    'data_analytics':'Data Scientist',
+    'data_eng':      'Data Scientist',
+    'web_dev':       'Full Stack Developer',
+    'mobile':        'Mobile Developer',
+    'devops':        'DevOps Engineer',
+    'cybersec':      'Security Engineer',
+    'game_dev':      'Game Developer',
+    'quantum_comp':  'Quantum Researcher',
+    'blockchain':    'Blockchain Developer',
+    'iot':           'IoT Engineer',
+    'ux':            'UI/UX Designer',
+    'product':       'Product Manager',
+    'business':      'Product Manager',
+    'dsa':           'Full Stack Developer',
+    'low_code':      'Product Manager',
+    'general':       'Full Stack Developer',
 }
 
 DOMAIN_DISPLAY_NAMES = {
-    'ai': 'Artificial Intelligence',
-    'ds': 'Data Science',
-    'web': 'Web Development',
-    'dsa': 'Data Structures & Algorithms',
-    'devops': 'DevOps Engineering',
-    'cybersec': 'Cybersecurity',
-    'android': 'Android Development',
-    'general': 'General Foundation'
+    'ai':            'Artificial Intelligence',
+    'genai':         'Generative AI',
+    'data_science':  'Data Science',
+    'data_analytics':'Data Analytics',
+    'data_eng':      'Data Engineering',
+    'web_dev':       'Web Development',
+    'mobile':        'Mobile Development',
+    'devops':        'Cloud & DevOps',
+    'cybersec':      'Cyber Security',
+    'dsa':           'Data Structures & Algorithms',
+    'game_dev':      'Game Development',
+    'quantum_comp':  'Quantum Computing',
+    'blockchain':    'Blockchain & Web3',
+    'iot':           'Internet of Things (IoT)',
+    'ux':            'UI/UX Design',
+    'low_code':      'No/Low Code',
+    'product':       'Product Management',
+    'business':      'Business & Entrepreneurship',
+    'general':       'General Foundation'
 }
 
-# DOMAIN_PREREQUISITES = {
-#     'ai': ['general', 'ds'],    
-#     'ds': ['general'],          
-#     'web': ['general'],
-#     'android': ['general', 'dsa'],
-#     'devops': ['general', 'web'],
-#     'cybersec': ['general', 'web'],
-#     'dsa': ['general'],
-#     'general': [],              # Base level, no prerequisites
-# }
-
 DOMAIN_PREREQUISITES = {
-    # Tier 0: Absolute Basics
-    'general': [],              
-    
-    # Tier 1: Core Programming
-    'web': ['general'],         
-    'dsa': ['general'],         
-    
-    # Tier 2: Intermediate Applications
-    'ds': ['general', 'dsa'],     # Needs DSA logic for Pandas/Numpy
-    'android': ['web', 'dsa'],    # Needs Web for APIs and DSA for logic
-    'devops': ['web'],            # Needs Web to understand what to deploy
-    
-    # Tier 3: Advanced Specializations
-    'ai': ['ds', 'dsa'],          # Needs Data Science math and DSA efficiency
-    'cybersec': ['web', 'devops'] # Needs to know how to build apps AND deploy them to secure them
+    'general': [],
+    'dsa': ['general'],
+    'web_dev': ['general'],
+    'mobile': ['web_dev'],
+    'devops': ['web_dev'],
+    'cybersec': ['web_dev', 'devops'],
+    'data_analytics': ['general'],
+    'data_eng': ['general'],
+    'data_science': ['data_analytics', 'data_eng'],
+    'ai': ['data_science'],
+    'genai': ['ai'],
+    'game_dev': ['dsa'],
+    'quantum_comp': ['dsa'],
+    'blockchain': ['web_dev', 'cybersec'],
+    'iot': ['general'],
+    'ux': ['general'],
+    'low_code': ['general'],
+    'business': ['general'],
+    'product': ['business']
 }
 
 # ═══════════════════════════════════════════════════════

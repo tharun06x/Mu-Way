@@ -139,6 +139,13 @@ class DataLoader:
             task_catalog = km_enrich.copy()
             task_catalog['domain'] = task_catalog.get('km_domain', 'general')
 
+        from problem1 import hashtag_to_domain
+        task_catalog['domain_mapped'] = task_catalog['domain'].apply(
+            lambda x: hashtag_to_domain(x) if pd.notna(x) else 'general'
+        )
+        task_catalog = task_catalog[task_catalog['domain_mapped'] != 'ignored'].copy()
+        task_catalog.drop(columns=['domain_mapped'], inplace=True)
+
         # Fill defaults
         task_catalog['difficulty_level']  = task_catalog.get('difficulty_level', 2).fillna(2).astype(int)
         task_catalog['task_karma_value']  = task_catalog.get('task_karma_value', 50).fillna(50)
