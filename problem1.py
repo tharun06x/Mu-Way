@@ -53,9 +53,14 @@ def validate_data(df: pd.DataFrame):
         raise ValueError("is_approved must be 0 or 1")
     
     if 'difficulty_level' in df.columns:
-        valid_diffs = df['difficulty_level'].dropna()
-        if not valid_diffs.isin([1, 2, 3, 4]).all():
-            raise ValueError("difficulty_level must be between 1 and 4")
+        # Accept floats (Bayesian-smoothed difficulty) — just ensure they are in [1, 4]
+        valid_diffs = pd.to_numeric(df['difficulty_level'], errors='coerce').dropna()
+        if len(valid_diffs) > 0 and not valid_diffs.between(1.0, 4.0).all():
+            out_of_range = valid_diffs[~valid_diffs.between(1.0, 4.0)]
+            raise ValueError(
+                f"difficulty_level must be in [1.0, 4.0]; "
+                f"found {len(out_of_range)} out-of-range values: {out_of_range.values[:5]}"
+            )
 
 # ─────────────────────────────────────────────────────────────────────────── #
 #  Domain / Difficulty Mapping                                                #
@@ -108,7 +113,12 @@ def _approval_conf(group: pd.DataFrame) -> float:
 
 def _engagement(user_df: pd.DataFrame, ref: pd.Timestamp) -> float:
     """EngagementScore = log(1+N_30) × (days_since_last+1)^(-0.5)."""
-    days  = (ref - pd.to_datetime(user_df['submission_date'])).dt.days.clip(lower=0)
+    dates = pd.to_datetime(user_df['submission_date'])
+    # Strip timezone info to avoid TypeError when mixing tz-aware and tz-naive
+    if dates.dt.tz is not None:
+        dates = dates.dt.tz_localize(None)
+    ref_naive = ref.tz_localize(None) if ref.tzinfo is not None else ref
+    days  = (ref_naive - dates).dt.days.clip(lower=0)
     n_30  = int((days <= 30).sum())
     d_last = float(days.min())
     return float(np.log1p(n_30) * (d_last + 1) ** (-0.5))
