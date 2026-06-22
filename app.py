@@ -201,7 +201,7 @@ if run and data_ok:
     recs      = result["recs"]
     roadmap   = result.get("roadmap", {})
     known     = result.get("known_user", False)
-    weeks     = roadmap.get("weeks", [])
+    weeks     = roadmap.get("roadmap_weeks", [])
 
     st.success(f"✅ Roadmap ready in {elapsed:.1f}s!")
 
