@@ -14,6 +14,7 @@ import os
 import sys
 import time
 import warnings
+from pathlib import Path
 warnings.filterwarnings('ignore')
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -563,7 +564,10 @@ def display_roadmap(result: dict):
               f'{magenta(result["role"])} role tasks.')
         print(f'  {dim("Next:")} Explore related skills below.')
     elif len(recs):
-        for diff, group in recs.groupby('difficulty_level', sort=True):
+        # B16 fix: floor to int so groupby produces clean Beginner/Intermediate/Advanced buckets
+        recs = recs.copy()
+        recs['_diff_int'] = recs['difficulty_level'].apply(lambda x: int(float(x)))
+        for diff, group in recs.groupby('_diff_int', sort=True):
             diff = int(diff)
             domains = ', '.join(
                 f'{DOMAIN_ICONS.get(str(dom), "GEN")} {dom}'
@@ -708,8 +712,11 @@ def main():
     # ── Ask to export ──────────────────────────────────────────── #
     export = input(f'  {cyan("->")} Export roadmap to JSON? (y/N): ').strip().lower()
     if export == 'y':
-        out_path = f'output/roadmap_{muid.split("@")[0]}.json'
-        os.makedirs('output', exist_ok=True)
+        # B17 fix: use Path to build a portable, absolute-safe output path
+        out_dir  = Path(config.OUTPUT_DIR).resolve()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        safe_id  = result['muid'].split('@')[0].replace('/', '_')
+        out_path = out_dir / f'roadmap_{safe_id}.json'
         export_data = {
             'muid':          result['muid'],
             'name':          result['name'],
@@ -725,9 +732,11 @@ def main():
             json.dump(export_data, f, indent=2, default=str)
         print(f'  {green("OK")} Saved -> {bold(out_path)}\n')
 
-    # ── Try another? ───────────────────────────────────────────── #
-    again = input(f'  {cyan("->")} Generate for another user? (y/N): ').strip().lower()
-    if again == 'y':
+    # ── Try another? (unlimited retries) ──────────────────────────────── #
+    while True:
+        again = input(f'  {cyan("->")} Generate for another user? (y/N): ').strip().lower()
+        if again != 'y':
+            break
         print()
         muid2 = prompt('Enter MUID')
         name2 = prompt('Enter name', default=muid2.split('@')[0].capitalize())
