@@ -41,10 +41,10 @@ def _gap_tier(weighted_gap: float) -> str:
     if weighted_gap >= config.GAP_TIER_CRITICAL:  return 'CRITICAL'
     if weighted_gap >= config.GAP_TIER_MODERATE:  return 'MODERATE'
     if weighted_gap >= config.GAP_TIER_MARGINAL:  return 'MARGINAL'
-    return 'MAINTENANCE'
+    return 'MET'  # B13 fix: align with problem2_runner.get_gap_tier() — was 'MAINTENANCE'
 
 
-TIER_ORDER = {'CRITICAL': 0, 'MODERATE': 1, 'MARGINAL': 2, 'MAINTENANCE': 3}
+TIER_ORDER = {'CRITICAL': 0, 'MODERATE': 1, 'MARGINAL': 2, 'MET': 3}  # B13 fix: was MAINTENANCE
 
 
 def _assign_urgency(recs: pd.DataFrame, domain_gaps: dict) -> pd.DataFrame:
@@ -66,8 +66,9 @@ def _assign_urgency(recs: pd.DataFrame, domain_gaps: dict) -> pd.DataFrame:
 
 def _enforce_difficulty_progression(tasks: pd.DataFrame) -> pd.DataFrame:
     """
-    Within each domain track: difficulty must not jump by more than 1 level.
-    Tasks violating this are deferred.
+    Within each domain track: difficulty must not jump by more than 1 level up.
+    Going down (easier tasks) is always allowed.
+    Tasks violating the +1 cap are deferred.
     """
     if 'difficulty_level' not in tasks.columns:
         return tasks
@@ -76,12 +77,14 @@ def _enforce_difficulty_progression(tasks: pd.DataFrame) -> pd.DataFrame:
     last_diff_by_domain: dict = {}
 
     for _, row in tasks.iterrows():
-        dom  = row['domain']
+        dom       = row['domain']
         diff_float = float(row.get('difficulty_level', 2.0))
-        diff_tier = int(diff_float)
-        last_tier = last_diff_by_domain.get(dom)
+        diff_tier  = int(diff_float)
+        last_tier  = last_diff_by_domain.get(dom)
 
-        if last_tier is None or (diff_tier >= last_tier and diff_tier <= last_tier + 1):
+        # B11 fix: allow difficulty to go DOWN freely (easier tasks are always fine);
+        # only cap upward jumps to +1 level at a time.
+        if last_tier is None or diff_tier <= last_tier + 1:
             kept.append(row)
             last_diff_by_domain[dom] = diff_tier
 
@@ -95,26 +98,31 @@ def _enforce_difficulty_progression(tasks: pd.DataFrame) -> pd.DataFrame:
 def _schedule_weeks(tasks: pd.DataFrame) -> list:
     """
     Pack tasks into weekly slots (3 hrs/week budget, max 16 weeks).
+    All time stored as MINUTES for consistent display.
 
     Returns:
-        list of dicts — {week, tasks: [{task_name, domain, urgency_tier, ...}]}
+        list of dicts — {week, minutes_used, tasks: [{task_name, domain, urgency_tier, ...}]}
     """
+    MINUTES_PER_WEEK = config.HOURS_PER_WEEK * 60   # 3 h * 60 = 180 min
+    TASK_MINUTES = {'Low': 60, 'Medium': 120, 'High': 180}
+
     weeks        = []
-    current_week = {'week': 1, 'hours_used': 0, 'tasks': []}
+    current_week = {'week': 1, 'minutes_used': 0, 'tasks': []}   # B10 fix: minutes_used
 
     for _, row in tasks.iterrows():
-        task_hrs = TASK_HOURS.get(
+        # B10 fix: budget and task durations in minutes
+        task_mins = TASK_MINUTES.get(
             str(row.get('complexity', 'Medium')).strip().capitalize(),
-            2,
+            120,
         )
 
-        if current_week['hours_used'] + task_hrs > HOURS_PER_WEEK:
+        if current_week['minutes_used'] + task_mins > MINUTES_PER_WEEK:
             weeks.append(current_week)
             if len(weeks) >= MAX_WEEKS:
                 return weeks
             current_week = {
                 'week': len(weeks) + 1,
-                'hours_used': 0,
+                'minutes_used': 0,   # B10 fix: minutes_used
                 'tasks': [],
             }
 
@@ -126,7 +134,7 @@ def _schedule_weeks(tasks: pd.DataFrame) -> list:
             'difficulty_order': float(row.get('difficulty_order', row.get('difficulty_level', 2.0))),
             'score':        round(float(row.get('score', 0.0)), 4),
         })
-        current_week['hours_used'] += task_hrs
+        current_week['minutes_used'] += task_mins   # B10 fix: minutes_used
 
     if current_week['tasks']:
         weeks.append(current_week)
@@ -301,7 +309,7 @@ def generate_career_roadmaps(
         if optional_col in pairs.columns:
             rec_cols.append(optional_col)
 
-    for idx, row in career_gap_df.iterrows():
+    for idx, (_, row) in enumerate(career_gap_df.iterrows()):   # B12 fix: sequential counter
         uid = row['user_id']
         try:
             # Top-K recommendations for this user from pairs
@@ -322,7 +330,7 @@ def generate_career_roadmaps(
         except Exception as exc:
             logger.warning(f'Roadmap failed for {uid}: {exc}')
 
-        if (idx + 1) % 500 == 0:
+        if (idx + 1) % 500 == 0:   # B12 fix: idx is now sequential (0-based)
             logger.info(f'  … {idx+1:,} roadmaps generated')
 
     logger.info(f'✓ Generated {len(roadmaps):,} roadmaps')
