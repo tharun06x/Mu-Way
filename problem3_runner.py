@@ -90,9 +90,14 @@ def engineer_task_features(
 
     mx_pop = tf['popularity'].max() or 1
     tf['community_approval'] = tf['popularity'] / mx_pop
-    tf['difficulty']         = 1.0 / (tf['popularity'] + 1)
-    mx_diff = tf['difficulty'].max() or 1
-    tf['difficulty']         = tf['difficulty'] / mx_diff
+
+    # B7 fix: use the actual difficulty_level column (1-4 scale) normalised to [0,1]
+    # instead of inverse-popularity which conflates task complexity with submission count.
+    if 'difficulty_level' in tf.columns:
+        mx_diff = tf['difficulty_level'].astype(float).max() or 4.0
+        tf['difficulty'] = tf['difficulty_level'].astype(float) / mx_diff
+    else:
+        tf['difficulty'] = 0.5  # neutral fallback
 
     # Map domain
     if 'domain' in tf.columns:
@@ -336,7 +341,8 @@ def recommend(
     Top-K recommendations for one user from precomputed batch pairs.
     Uses ML score if ≥5 submissions, else rule-based score.
     """
-    # Optimize O(N) lookup by using index
+    # B8 fix: copy before modifying index to avoid mutating the caller's dataframe
+    pairs = pairs.copy()
     if pairs.index.name != 'user_id' and 'user_id' in pairs.columns:
         pairs = pairs.set_index('user_id')
         
@@ -402,16 +408,23 @@ def recommend_for_user(
             
     uf = pd.DataFrame(uf_records)
     if uf.empty:
-        uf = pd.DataFrame([{
-            'user_id': user_id,
-            'domain': 'general',
-            'submission_count': 0,
-            'mastery': 0.0,
-            'gap_score': 1.0,
-            'approval_rate': 0.70,
-            'optimal_difficulty': 1.5,
-            'interest_score': 1.0,
-        }])
+        # B6 fix: broaden cold-start fallback to ALL non-ignored domains so
+        # new users receive recommendations across the full task catalog,
+        # not just 'general' which may have no tasks after domain filtering.
+        fallback_domains = [d for d in config.DOMAINS if d != 'ignored']
+        uf = pd.DataFrame([
+            {
+                'user_id': user_id,
+                'domain': dom,
+                'submission_count': 0,
+                'mastery': 0.0,
+                'gap_score': 1.0,
+                'approval_rate': 0.70,
+                'optimal_difficulty': 1.5,
+                'interest_score': 1.0,
+            }
+            for dom in fallback_domains
+        ])
 
     pairs = create_domain_matched_pairs(uf, task_features)
     pairs = engineer_advanced_features(pairs)
