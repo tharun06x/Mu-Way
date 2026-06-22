@@ -402,6 +402,12 @@ def generate_roadmap(muid: str, name: str, role: str,
         available['difficulty_order'] = available.apply(sort_key, axis=1)
         available['domain_priority']  = available['domain'].map(domain_priority).fillna(99)
         
+        # Apply ML Score Threshold
+        available = available[available['score'] >= 0.05]
+
+        # Apply Difficulty Floor
+        available = available[available['difficulty_level'] >= available.apply(lambda r: next_difficulty(r['domain']), axis=1) - 1.0]
+        
         # Sort by Domain Priority -> Difficulty Progression -> ML Score
         available = available.sort_values(
             ['domain_priority', 'difficulty_order', 'score'], 

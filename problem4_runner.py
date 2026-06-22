@@ -99,6 +99,8 @@ def _schedule_weeks(tasks: pd.DataFrame) -> list:
     """
     Pack tasks into weekly slots (3 hrs/week budget, max 16 weeks).
     All time stored as MINUTES for consistent display.
+    Applies noise reduction: max 4 tasks/week, max 2 tasks/domain/week,
+    and CRITICAL urgency blocks MODERATE tasks.
 
     Returns:
         list of dicts — {week, minutes_used, tasks: [{task_name, domain, urgency_tier, ...}]}
@@ -106,38 +108,60 @@ def _schedule_weeks(tasks: pd.DataFrame) -> list:
     MINUTES_PER_WEEK = config.HOURS_PER_WEEK * 60   # 3 h * 60 = 180 min
     TASK_MINUTES = {'Low': 60, 'Medium': 120, 'High': 180}
 
-    weeks        = []
-    current_week = {'week': 1, 'minutes_used': 0, 'tasks': []}   # B10 fix: minutes_used
+    weeks = []
+    tasks_to_schedule = tasks.to_dict('records')
 
-    for _, row in tasks.iterrows():
-        # B10 fix: budget and task durations in minutes
-        task_mins = TASK_MINUTES.get(
-            str(row.get('complexity', 'Medium')).strip().capitalize(),
-            120,
-        )
+    while tasks_to_schedule and len(weeks) < MAX_WEEKS:
+        current_week = {'week': len(weeks) + 1, 'minutes_used': 0, 'tasks': []}
+        deferred_tasks = []
+        week_domains = {}
+        has_critical = False
 
-        if current_week['minutes_used'] + task_mins > MINUTES_PER_WEEK:
-            weeks.append(current_week)
-            if len(weeks) >= MAX_WEEKS:
-                return weeks
-            current_week = {
-                'week': len(weeks) + 1,
-                'minutes_used': 0,   # B10 fix: minutes_used
-                'tasks': [],
-            }
+        for row in tasks_to_schedule:
+            task_mins = TASK_MINUTES.get(
+                str(row.get('complexity', 'Medium')).strip().capitalize(),
+                120,
+            )
+            domain = row.get('domain', '')
+            urgency = row.get('urgency_tier', 'MODERATE')
 
-        current_week['tasks'].append({
-            'task_name':    row.get('task_name', ''),
-            'domain':       row.get('domain', ''),
-            'urgency_tier': row.get('urgency_tier', 'MODERATE'),
-            'difficulty_level': float(row.get('difficulty_level', 2.0)),
-            'difficulty_order': float(row.get('difficulty_order', row.get('difficulty_level', 2.0))),
-            'score':        round(float(row.get('score', 0.0)), 4),
-        })
-        current_week['minutes_used'] += task_mins   # B10 fix: minutes_used
+            # --- Constraints ---
+            if current_week['minutes_used'] + task_mins > MINUTES_PER_WEEK:
+                deferred_tasks.append(row)
+                continue
+            if len(current_week['tasks']) >= 4:
+                deferred_tasks.append(row)
+                continue
+            if week_domains.get(domain, 0) >= 2:
+                deferred_tasks.append(row)
+                continue
+            if has_critical and urgency == 'MODERATE':
+                deferred_tasks.append(row)
+                continue
 
-    if current_week['tasks']:
+            # --- Add Task ---
+            current_week['tasks'].append({
+                'task_name':    row.get('task_name', ''),
+                'domain':       domain,
+                'urgency_tier': urgency,
+                'difficulty_level': float(row.get('difficulty_level', 2.0)),
+                'difficulty_order': float(row.get('difficulty_order', row.get('difficulty_level', 2.0))),
+                'score':        round(float(row.get('score', 0.0)), 4),
+            })
+            current_week['minutes_used'] += task_mins
+            week_domains[domain] = week_domains.get(domain, 0) + 1
+            if urgency == 'CRITICAL':
+                has_critical = True
+
+        if not current_week['tasks']:
+            # If no tasks could be scheduled (e.g. all tasks > MINUTES_PER_WEEK), prevent infinite loop
+            # Just force the first deferred task in if we are stuck, or break if it's too big.
+            if deferred_tasks and TASK_MINUTES.get(str(deferred_tasks[0].get('complexity', 'Medium')).strip().capitalize(), 120) > MINUTES_PER_WEEK:
+                break # Task is impossible to schedule
+            break
+
         weeks.append(current_week)
+        tasks_to_schedule = deferred_tasks
 
     return weeks
 
