@@ -34,7 +34,8 @@ DOMAINS = [
     'ai', 'genai', 'data_science', 'data_analytics', 'data_eng',
     'web_dev', 'mobile', 'devops', 'cybersec',
     'dsa', 'game_dev', 'quantum_comp', 'blockchain', 'iot',
-    'ux', 'low_code', 'product', 'business', 'general'
+    'ux', 'low_code', 'product', 'business', 'general',
+    'maths', 'cloud', 'hardware'
 ]
 
 # Load taxonomy from YAML
@@ -136,10 +137,44 @@ ROLE_REQUIREMENTS = {
         'general':       (0.70, 0.05),
     },
     'Quantum Researcher': {
-        'quantum_comp':  (0.95, 0.50),
-        'data_science':  (0.70, 0.20),
-        'dsa':           (0.80, 0.20),
-        'ai':            (0.60, 0.10),
+        'quantum_comp':  (0.95, 0.40),
+        'maths':         (0.85, 0.30),
+        'dsa':           (0.80, 0.15),
+        'data_science':  (0.60, 0.10),
+        'ai':            (0.50, 0.05),
+    },
+    'Machine Learning Engineer': {
+        'ai':            (0.95, 0.40),
+        'genai':         (0.80, 0.20),
+        'maths':         (0.85, 0.15),
+        'devops':        (0.70, 0.15),
+        'data_eng':      (0.60, 0.10),
+    },
+    'Data Engineer': {
+        'data_eng':      (0.95, 0.50),
+        'cloud':         (0.80, 0.20),
+        'dsa':           (0.70, 0.15),
+        'data_analytics':(0.60, 0.15),
+    },
+    'Cloud Architect': {
+        'cloud':         (0.95, 0.50),
+        'devops':        (0.85, 0.20),
+        'cybersec':      (0.75, 0.15),
+        'web_dev':       (0.60, 0.10),
+        'business':      (0.60, 0.05),
+    },
+    'Systems Engineer': {
+        'dsa':           (0.90, 0.40),
+        'devops':        (0.80, 0.25),
+        'cybersec':      (0.70, 0.15),
+        'hardware':      (0.70, 0.10),
+        'general':       (0.80, 0.10),
+    },
+    'Hardware Engineer': {
+        'hardware':      (0.95, 0.60),
+        'iot':           (0.85, 0.20),
+        'dsa':           (0.60, 0.15),
+        'general':       (0.70, 0.05),
     }
 }
 
@@ -148,7 +183,7 @@ DOMAIN_TO_ROLE = {
     'genai':         'AI Engineer',
     'data_science':  'Data Scientist',
     'data_analytics':'Data Scientist',
-    'data_eng':      'Data Scientist',
+    'data_eng':      'Data Engineer',
     'web_dev':       'Full Stack Developer',
     'mobile':        'Mobile Developer',
     'devops':        'DevOps Engineer',
@@ -160,9 +195,12 @@ DOMAIN_TO_ROLE = {
     'ux':            'UI/UX Designer',
     'product':       'Product Manager',
     'business':      'Product Manager',
-    'dsa':           'Full Stack Developer',
+    'dsa':           'Systems Engineer',
     'low_code':      'Product Manager',
     'general':       'Full Stack Developer',
+    'maths':         'Quantum Researcher',
+    'cloud':         'Cloud Architect',
+    'hardware':      'Hardware Engineer',
 }
 
 DOMAIN_DISPLAY_NAMES = {
@@ -184,7 +222,10 @@ DOMAIN_DISPLAY_NAMES = {
     'low_code':      'No/Low Code',
     'product':       'Product Management',
     'business':      'Business & Entrepreneurship',
-    'general':       'General Foundation'
+    'general':       'General Foundation',
+    'maths':         'Mathematics & Stats',
+    'cloud':         'Cloud Architecture',
+    'hardware':      'Hardware & Systems'
 }
 
 DOMAIN_PREREQUISITES = {
@@ -206,7 +247,10 @@ DOMAIN_PREREQUISITES = {
     'ux': ['general'],
     'business': ['general'],
     'product': ['business', 'ux'],
-    'low_code': ['general']
+    'low_code': ['general'],
+    'maths': ['general'],
+    'cloud': ['devops'],
+    'hardware': ['general']
 }
 
 # ═══════════════════════════════════════════════════════

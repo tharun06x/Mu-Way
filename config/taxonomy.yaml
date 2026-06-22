@@ -431,6 +431,27 @@ domain_token_map:
     - sl
     - muconnect
 
+  maths:
+    - math
+    - calculus
+    - algebra
+    - statistics
+    - probability
+    - discrete
+
+  cloud:
+    - cloudarch
+    - aws
+    - gcp
+    - azure
+    - serverless
+
+  hardware:
+    - embedded
+    - robotics
+    - pcb
+    - vlsi
+
 structural_tokens:
   # Prefix/namespace tokens to skip during domain matching
   - cl
