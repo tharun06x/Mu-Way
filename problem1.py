@@ -22,6 +22,7 @@ import pandas as pd
 import numpy as np
 import logging
 import re
+from pathlib import Path
 import config
 from pydantic import BaseModel, Field, ValidationError
 
@@ -218,13 +219,40 @@ def build_feature_store(
     task_data: pd.DataFrame = None,
     reference_date=None,
     save: bool = True,
-    existing_store: pd.DataFrame = None
+    existing_store: pd.DataFrame = None,
+    max_cache_age_hours: float = 24.0,
 ) -> pd.DataFrame:
     """
     Build the feature store for ALL users, supporting incremental updates.
+
+    Persistent caching: if FEATURE_STORE_FILE exists and is younger than
+    max_cache_age_hours (default 24 h), it is loaded directly to skip the
+    expensive rebuild step (~60 s for 30 k users).
+    Pass max_cache_age_hours=0 to force a full rebuild.
     """
+    import time as _time
+
     ref = pd.Timestamp(reference_date) if reference_date else pd.Timestamp.now()
-    
+
+    # ── Persistent cache check ──────────────────────────────────────────────── #
+    cache_file = config.FEATURE_STORE_FILE
+    if (
+        existing_store is None
+        and max_cache_age_hours > 0
+        and Path(cache_file).exists()
+    ):
+        age_hours = (_time.time() - Path(cache_file).stat().st_mtime) / 3600
+        if age_hours < max_cache_age_hours:
+            try:
+                cached = pd.read_pickle(cache_file)
+                logger.info(
+                    f"✓ Loaded feature store from cache ({age_hours:.1f}h old) "
+                    f"→ {len(cached):,} users × {len(cached.columns)} features"
+                )
+                return cached
+            except Exception as exc:
+                logger.warning(f"Cache load failed ({exc}), rebuilding ...")
+
     # 1. Schema Validation
     validate_data(user_data)
     
