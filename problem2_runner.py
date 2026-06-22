@@ -94,13 +94,16 @@ def compute_career_gap(user_mastery: dict, dream_role: str) -> dict:
         }
         total_gap += weighted_gap
 
-    total_gap = float(np.clip(total_gap, 0, 1))
+    total_gap      = float(np.clip(total_gap, 0.0, 1.0))
+    # Clip alignment independently — it must also stay in [0, 1]
+    alignment      = float(np.clip(1.0 - total_gap, 0.0, 1.0))
+    readiness_pct  = round(100.0 * alignment, 2)
 
     return {
         'dream_role':          dream_role,
         'career_gap':          round(total_gap, 4),
-        'alignment_score':     round(1.0 - total_gap, 4),
-        'readiness_pct':       round(100 * (1.0 - total_gap), 2),
+        'alignment_score':     round(alignment, 4),
+        'readiness_pct':       readiness_pct,
         'career_gap_tier':     get_gap_tier(total_gap),
         'domain_gaps':         domain_gaps,
         'domain_gaps_json':    json.dumps(domain_gaps),
