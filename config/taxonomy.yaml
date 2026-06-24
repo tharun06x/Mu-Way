@@ -175,9 +175,7 @@ domain_token_map:
   devops:
   - dop
   - devops
-  - aws
   - docker
-  - cloud
   - kubernetes
   - k8s
   - introtocloud
@@ -189,21 +187,6 @@ domain_token_map:
   - containerize
   - vmvoyage
   - dockerize
-  - awssetup
-  - awsresource
-  - ec2hunt
-  - awss3map
-  - awsrds
-  - costtracker
-  - top20cost
-  - costdashboard
-  - trustadvisor
-  - visualresouce
-  - deployapp
-  - monitoralert
-  - autoscale
-  - costopt
-  - githubactions
   - awsdocker
   - autodeploy
   - shipyard26
@@ -213,6 +196,7 @@ domain_token_map:
   - git
   - helm
   - terraform
+  - githubactions
   cybersec:
   - cybersec
   - security
@@ -400,11 +384,26 @@ domain_token_map:
   - probability
   - discrete
   cloud:
+  - cloud
   - cloudarch
   - aws
   - gcp
   - azure
   - serverless
+  - awssetup
+  - awsresource
+  - ec2hunt
+  - awss3map
+  - awsrds
+  - costtracker
+  - top20cost
+  - costdashboard
+  - trustadvisor
+  - visualresouce
+  - deployapp
+  - monitoralert
+  - autoscale
+  - costopt
   hardware:
   - embedded
   - robotics
