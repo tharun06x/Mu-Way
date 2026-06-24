@@ -350,9 +350,13 @@ def _synthesize_role_domain_candidates(
         dom  = row['domain']
         gap  = domain_gaps.get(dom, {}).get('raw_gap', 0.0)
         weight = domains.get(dom, (0.5, 0.1))[1]
-        # Popularity boost: normalise real_attempts to [0, 1]
+        # F16 fix: popularity boost capped at 0.1× to prevent a viral but irrelevant
+        # task from outranking a critical skill-gap task. Without the cap, a popular
+        # task scores up to 0.90 vs a critical-gap task at 0.05 (gap×weight).
+        # With cap: popular boost ≤ 0.10, gap signal = up to 0.60 — gap always wins.
         popularity = float(row.get('real_attempts', 0))
-        return round(gap * weight + popularity / (popularity + 1000), 4)
+        pop_boost  = 0.10 * popularity / (popularity + 1000)
+        return round(gap * weight + pop_boost, 4)
 
     catalog['score'] = catalog.apply(_score, axis=1)
     catalog['domain_priority'] = catalog['domain'].map(domain_priority).fillna(99).astype(int)
