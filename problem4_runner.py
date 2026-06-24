@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 import config
+from problem1 import hashtag_to_domain
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +307,70 @@ def build_roadmap_for_user(
 #  Full Pipeline                                                              #
 # ─────────────────────────────────────────────────────────────────────────── #
 
+def _synthesize_role_domain_candidates(
+    task_lookup: pd.DataFrame,
+    domains: dict,
+    domain_gaps: dict,
+    top_k: int = 50,
+) -> pd.DataFrame:
+    """
+    Build a role-specific, role-filtered candidate task pool directly from the
+    task catalog, scored using Problem 2's authoritative mastery-vs-requirement
+    gap instead of Problem 3's submission-count proxy.
+
+    Args:
+        task_lookup  : full task catalog DataFrame (from DataLoader)
+        domains      : {domain: (required_mastery, weight)} from ROLE_REQUIREMENTS
+        domain_gaps  : {domain: {raw_gap, weighted_gap, tier, ...}} from Problem 2
+        top_k        : maximum candidates to return
+
+    Returns:
+        DataFrame with columns [task_name, domain, score, difficulty_level,
+                                 complexity, domain_priority]
+    """
+    if task_lookup is None or task_lookup.empty:
+        return pd.DataFrame()
+
+    # Map the raw catalog domain tags to canonical domain names
+    catalog = task_lookup.copy()
+    catalog['domain'] = catalog['domain'].apply(hashtag_to_domain)
+
+    # Only keep tasks belonging to the role's required domains
+    role_domains = list(domains.keys())
+    catalog = catalog[catalog['domain'].isin(role_domains)].copy()
+
+    if catalog.empty:
+        return pd.DataFrame()
+
+    # Domain priority (lower index = higher priority in the role)
+    domain_priority = {d: i for i, d in enumerate(role_domains)}
+
+    # Score using authoritative P2 raw_gap × domain weight
+    def _score(row):
+        dom  = row['domain']
+        gap  = domain_gaps.get(dom, {}).get('raw_gap', 0.0)
+        weight = domains.get(dom, (0.5, 0.1))[1]
+        # Popularity boost: normalise real_attempts to [0, 1]
+        popularity = float(row.get('real_attempts', 0))
+        return round(gap * weight + popularity / (popularity + 1000), 4)
+
+    catalog['score'] = catalog.apply(_score, axis=1)
+    catalog['domain_priority'] = catalog['domain'].map(domain_priority).fillna(99).astype(int)
+
+    # Ensure required columns exist
+    for col, default in [('difficulty_level', 2.0), ('complexity', 'Medium')]:
+        if col not in catalog.columns:
+            catalog[col] = default
+
+    return (
+        catalog
+        .sort_values(['domain_priority', 'score'], ascending=[True, False])
+        .head(top_k)
+        [['task_name', 'domain', 'score', 'difficulty_level', 'complexity', 'domain_priority']]
+        .reset_index(drop=True)
+    )
+
+
 def generate_career_roadmaps(
     career_gap_df: pd.DataFrame,
     pairs: pd.DataFrame,
@@ -315,9 +380,17 @@ def generate_career_roadmaps(
     """
     Generate roadmaps for all users in career_gap_df.
 
+    For users with a recognised dream role, candidates are built directly from
+    the task catalog filtered to the role's required domains and scored using the
+    authoritative Problem 2 mastery gap — NOT Problem 3's user-activity-scoped
+    pairs (which are role-blind and pollute the roadmap with off-domain tasks).
+
+    Users with an unrecognised role fall back to Problem 3's pairs so no edge
+    case is broken.
+
     Args:
         career_gap_df : output of Problem 2
-        pairs         : scored pairs from Problem 3
+        pairs         : scored pairs from Problem 3 (fallback only)
         task_data     : task catalog
         top_k         : tasks to consider per user for scheduling
 
@@ -326,27 +399,49 @@ def generate_career_roadmaps(
     """
     logger.info(f'Generating roadmaps for {len(career_gap_df):,} users ...')
     roadmaps = []
-    score_col = 'final_score' if 'final_score' in pairs.columns else 'rule_score'
+
+    # Build a fallback lookup from Problem 3 pairs (for unrecognised roles)
+    score_col   = 'final_score' if 'final_score' in pairs.columns else 'rule_score'
     pair_groups = {uid: grp for uid, grp in pairs.groupby('user_id', sort=False)}
-    rec_cols = ['task_name', 'domain', score_col]
+    rec_cols    = ['task_name', 'domain', score_col]
     for optional_col in ['difficulty_level', 'difficulty_order', 'domain_priority', 'complexity']:
         if optional_col in pairs.columns:
             rec_cols.append(optional_col)
 
-    for idx, (_, row) in enumerate(career_gap_df.iterrows()):   # B12 fix: sequential counter
-        uid = row['user_id']
+    for idx, (_, row) in enumerate(career_gap_df.iterrows()):
+        uid        = row['user_id']
+        dream_role = row.get('dream_role', '')
         try:
-            # Top-K recommendations for this user from pairs
-            user_pairs = pair_groups.get(uid)
-            if user_pairs is None:
-                continue
-            if len(user_pairs) == 0:
-                continue
+            dg_raw = row.get('domain_gaps_json', '{}')
+            try:
+                domain_gaps = json.loads(dg_raw) if isinstance(dg_raw, str) else (dg_raw or {})
+            except Exception:
+                domain_gaps = {}
 
-            recs = (
-                user_pairs.nlargest(top_k, score_col)[rec_cols]
-                .rename(columns={score_col: 'score'})
-            )
+            if dream_role in config.ROLE_REQUIREMENTS:
+                # ── Role-aware path (correct) ─────────────────────────── #
+                role_domains = config.ROLE_REQUIREMENTS[dream_role]
+                recs = _synthesize_role_domain_candidates(
+                    task_data, role_domains, domain_gaps, top_k=top_k * 3
+                )
+                if recs.empty:
+                    # Graceful fallback: no catalog tasks found for this role
+                    user_pairs = pair_groups.get(uid)
+                    if user_pairs is None or len(user_pairs) == 0:
+                        continue
+                    recs = (
+                        user_pairs.nlargest(top_k, score_col)[rec_cols]
+                        .rename(columns={score_col: 'score'})
+                    )
+            else:
+                # ── Fallback for unrecognised roles (old behaviour) ───── #
+                user_pairs = pair_groups.get(uid)
+                if user_pairs is None or len(user_pairs) == 0:
+                    continue
+                recs = (
+                    user_pairs.nlargest(top_k, score_col)[rec_cols]
+                    .rename(columns={score_col: 'score'})
+                )
 
             roadmap = build_roadmap_for_user(uid, row, recs, task_data)
             roadmaps.append(roadmap)
@@ -354,7 +449,7 @@ def generate_career_roadmaps(
         except Exception as exc:
             logger.warning(f'Roadmap failed for {uid}: {exc}')
 
-        if (idx + 1) % 500 == 0:   # B12 fix: idx is now sequential (0-based)
+        if (idx + 1) % 500 == 0:
             logger.info(f'  … {idx+1:,} roadmaps generated')
 
     logger.info(f'✓ Generated {len(roadmaps):,} roadmaps')
