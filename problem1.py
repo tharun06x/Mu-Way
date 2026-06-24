@@ -115,10 +115,10 @@ def _approval_conf(group: pd.DataFrame) -> float:
 def _engagement(user_df: pd.DataFrame, ref: pd.Timestamp) -> float:
     """EngagementScore = log(1+N_30) × (days_since_last+1)^(-0.5)."""
     dates = pd.to_datetime(user_df['submission_date'])
-    # Strip timezone info to avoid TypeError when mixing tz-aware and tz-naive
+    # Normalise to UTC-naive to avoid cross-tz arithmetic errors (BUG-6 fix)
     if dates.dt.tz is not None:
-        dates = dates.dt.tz_localize(None)
-    ref_naive = ref.tz_localize(None) if ref.tzinfo is not None else ref
+        dates = dates.dt.tz_convert('UTC').dt.tz_localize(None)
+    ref_naive = ref.replace(tzinfo=None) if ref.tzinfo is not None else ref
     days  = (ref_naive - dates).dt.days.clip(lower=0)
     n_30  = int((days <= 30).sum())
     d_last = float(days.min())
@@ -203,7 +203,7 @@ def compute_user_features(
 
     # ── Extra features ────────────────────────────────────────────────── #
     dates = pd.to_datetime(df['submission_date'])
-    feat['days_since_last_submission'] = int((ref - dates.max()).days)
+    feat['days_since_last_submission'] = max(0, int((ref - dates.max()).days))  # BUG-2 fix: clamp to >= 0
     feat['is_cold_start']  = int(total < config.WARM_UP_THRESHOLD)
     feat['approved_count'] = int(df['is_approved'].sum())
 
@@ -280,8 +280,12 @@ def build_feature_store(
         
     # 3. Incremental Update Filtering
     if existing_store is not None:
-        users_to_update = df['user_id'].unique()
-        df = df[df['user_id'].isin(users_to_update)]
+        # BUG-1 fix: filter to users ALREADY in the store (not all new users)
+        if existing_store.index.name == 'user_id':
+            store_user_ids = set(existing_store.index.tolist())
+        else:
+            store_user_ids = set(existing_store['user_id'].tolist())
+        df = df[df['user_id'].isin(store_user_ids)]
     
     logger.info(f"Building features for {df['user_id'].nunique():,} users ...")
 
