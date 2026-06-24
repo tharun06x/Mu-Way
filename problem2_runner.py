@@ -151,9 +151,16 @@ def run_skill_gap_pipeline(
     count_cols = [f'task_count_{d}' for d in config.DOMAINS if f'task_count_{d}' in fs.columns]
     if count_cols:
         counts_mat = fs[count_cols].values
+        # BUG-3 fix: rows where ALL counts are 0 are cold-start users.
+        # np.argmax([0,0,...,0]) returns 0 (first domain = 'ai'), which wrongly
+        # assigns them as AI Engineers. Detect and route them to 'general' first.
+        row_sums = counts_mat.sum(axis=1)
         dominant_domain_idx = counts_mat.argmax(axis=1)
         domain_names = [c.replace('task_count_', '') for c in count_cols]
-        dominant_domains = [domain_names[i] for i in dominant_domain_idx]
+        dominant_domains = [
+            'general' if row_sums[i] == 0 else domain_names[dominant_domain_idx[i]]
+            for i in range(len(dominant_domain_idx))
+        ]
     else:
         dominant_domains = ['general'] * len(fs)
 
@@ -161,50 +168,69 @@ def run_skill_gap_pipeline(
     for uid, dom in zip(user_ids, dominant_domains):
         role = dream_roles.get(uid)
         if role is None:
-            # Cold-start: all counts zero → use default
             role = DOMAIN_TO_ROLE.get(dom, 'Full Stack Developer')
         roles.append(role)
 
     fs['_dream_role'] = roles
 
-    # ── Step 2: Vectorized gap computation per role group ─────────────────── #
+    # ── Step 2: Fully vectorized gap computation per role group ──────────── #
+    # BUG-9 fix: replaced iterrows() with matrix ops so this scales to 30k users
     records = []
-    mastery_cols = {d: f'mastery_{d}' for d in config.DOMAINS}
 
     for role_name, group in fs.groupby('_dream_role'):
         requirements = ROLE_REQUIREMENTS.get(role_name, ROLE_REQUIREMENTS['Full Stack Developer'])
+        req_domains  = list(requirements.keys())
+        required_arr = np.array([requirements[d][0] for d in req_domains], dtype=float)
+        weight_arr   = np.array([requirements[d][1] for d in req_domains], dtype=float)
 
-        for _, row in group.iterrows():
-            uid = row.get('user_id', row.name)
+        # Gather mastery matrix (users × domains)
+        mastery_cols = [f'mastery_{d}' for d in req_domains]
+        available    = [c for c in mastery_cols if c in group.columns]
+        mastery_mat  = group[available].values.astype(float) if available else np.zeros((len(group), len(req_domains)))
+
+        # Pad missing domain columns with 0
+        if len(available) < len(req_domains):
+            full_mat = np.zeros((len(group), len(req_domains)))
+            for i, col in enumerate(mastery_cols):
+                if col in group.columns:
+                    full_mat[:, i] = group[col].values
+            mastery_mat = full_mat
+
+        raw_gaps     = np.maximum(0.0, required_arr - mastery_mat)          # (users × domains)
+        weighted_gaps = raw_gaps * weight_arr                                # (users × domains)
+        total_gaps   = np.clip(weighted_gaps.sum(axis=1), 0.0, 1.0)         # (users,)
+        alignments   = np.clip(1.0 - total_gaps, 0.0, 1.0)
+
+        uid_series = group.get('user_id', group.index.to_series())
+
+        for i, (uid, total_gap, alignment) in enumerate(
+            zip(uid_series, total_gaps, alignments)
+        ):
+            # Per-domain gap dict for this user
             domain_gaps = {}
-            total_gap   = 0.0
-
-            for domain, (required, weight) in requirements.items():
-                col     = mastery_cols.get(domain)
-                current = float(row[col]) if col and col in row.index else 0.0
-                raw_gap = max(0.0, required - current)
-                wgap    = raw_gap * weight
-
+            for j, domain in enumerate(req_domains):
+                current  = float(mastery_mat[i, j])
+                raw_gap  = float(raw_gaps[i, j])
+                wgap     = float(weighted_gaps[i, j])
+                required = required_arr[j]
                 domain_gaps[domain] = {
                     'current':          round(current, 4),
                     'required':         required,
                     'raw_gap':          round(raw_gap, 4),
                     'weighted_gap':     round(wgap, 4),
                     'tier':             get_gap_tier(wgap),
-                    'domain_alignment': round(min(1.0, current / required) if required > 0 else 1.0, 4),
+                    'domain_alignment': round(
+                        min(1.0, current / required) if required > 0 else 1.0, 4
+                    ),
                 }
-                total_gap += wgap
-
-            total_gap = float(np.clip(total_gap, 0.0, 1.0))
-            alignment = float(np.clip(1.0 - total_gap, 0.0, 1.0))
 
             records.append({
                 'user_id':          uid,
                 'dream_role':       role_name,
-                'career_gap':       round(total_gap, 4),
-                'alignment_score':  round(alignment, 4),
-                'readiness_pct':    round(100.0 * alignment, 2),
-                'career_gap_tier':  get_gap_tier(total_gap),
+                'career_gap':       round(float(total_gap), 4),
+                'alignment_score':  round(float(alignment), 4),
+                'readiness_pct':    round(100.0 * float(alignment), 2),
+                'career_gap_tier':  get_gap_tier(float(total_gap)),
                 'domain_gaps_json': json.dumps(domain_gaps),
             })
 
