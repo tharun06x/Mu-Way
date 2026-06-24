@@ -47,11 +47,22 @@ logger = logging.getLogger(__name__)
 def engineer_user_features(user_data: pd.DataFrame) -> pd.DataFrame:
     """User × domain level features."""
     records = []
-    max_submissions = user_data.groupby(['user_id', 'domain_mapped']).size().max() or 1
+    # BUG-4 fix: mastery was divided by a single GLOBAL max (e.g. one power user with
+    # 300 GitHub tasks). This collapsed every other user's mastery to near-zero,
+    # inflating gap_score to ~1.0 for everyone and making all tasks equally critical.
+    # Fix: use each user's own max submission count across domains as the denominator.
+    user_max_submissions = (
+        user_data.groupby(['user_id', 'domain_mapped'])
+        .size()
+        .groupby(level='user_id')
+        .max()
+        .to_dict()
+    )
 
     for (uid, dom), grp in user_data.groupby(['user_id', 'domain_mapped']):
         sub_count = len(grp)
-        mastery   = sub_count / max_submissions
+        user_max  = max(user_max_submissions.get(uid, 1), 1)
+        mastery   = sub_count / user_max
         approved = grp[grp['is_approved'] == 1]
         optimal_difficulty = (
             float(approved['difficulty_level'].mean()) + 0.5
@@ -150,12 +161,12 @@ def engineer_advanced_features(pairs: pd.DataFrame) -> pd.DataFrame:
         0.30 * pairs['difficulty_suitability'].clip(0, 1)
     )
     pairs['task_count_in_domain']   = pairs.groupby(['user_id', 'domain'])['task_name'].transform('count')
-    pairs['task_role_relevance']    = 1.0
-    pairs['domain_importance']      = 1.0
-
-    before = len(pairs)
-    pairs  = pairs[(pairs['interest_score'] > 0) | (pairs['gap_score'] > 0)]
-    logger.info(f"Pairs after relevance filter: {before:,} → {len(pairs):,}")
+    # BUG-7 fix: removed constant 1.0 sentinel features 'task_role_relevance' and
+    # 'domain_importance'. Constant features have zero variance — GBR learns nothing
+    # from them and they waste memory and inflate FEATURE_NAMES.
+    # BUG-8 fix: removed dead relevance filter below. In the batch path, pairs with
+    # both interest_score == 0 and gap_score == 0 never enter engineer_user_features()
+    # in the first place, so this filter is always a no-op.
     return pairs
 
 
@@ -224,7 +235,9 @@ def prepare_recommendation_data(
 FEATURE_NAMES = [
     'gap_score', 'interest_score', 'community_approval',
     'difficulty_suitability', 'gap_interest', 'approval_probability',
-    'task_count_in_domain', 'task_role_relevance', 'domain_importance',
+    'task_count_in_domain',
+    # BUG-7 fix: removed 'task_role_relevance' and 'domain_importance' —
+    # both were always constant 1.0, contributing zero signal to the GBR model.
 ]
 
 
@@ -401,9 +414,13 @@ def recommend_for_user(
                 'submission_count': sub_count,
                 'mastery': user_dict.get(f'mastery_{dom}', 0.0),
                 'gap_score': 1.0 - user_dict.get(f'mastery_{dom}', 0.0),
-                'approval_rate': user_dict.get('_approval_conf', 0.70), 
+                'approval_rate': user_dict.get('global_approval_rate', 0.70),  # BUG-5 fix: was '_approval_conf' (key does not exist)
                 'optimal_difficulty': user_dict.get('optimal_difficulty', 1.5),
-                'interest_score': interest if interest > 0.0 else 1.0, 
+                # BUG-11 fix: interest_score must not be inverted.
+                # Previously: interest if interest > 0.0 else 1.0
+                # This boosted zero-interest domains to 1.0, ranking them HIGHER
+                # than genuinely interested domains. Fix: use the actual score.
+                'interest_score': max(interest, 0.0),
             })
             
     uf = pd.DataFrame(uf_records)
