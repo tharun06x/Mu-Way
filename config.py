@@ -264,10 +264,17 @@ DOMAIN_PREREQUISITES = {
 # Problem 3 — Task Ranking
 # ═══════════════════════════════════════════════════════
 TOP_K_RECOMMENDATIONS       = 5
-WEIGHT_CAREER_GAP           = 0.30 ## 40 to 30
-WEIGHT_INTEREST             = 0.20
-WEIGHT_COMMUNITY_APPROVAL   = 0.20
-WEIGHT_DIFFICULTY_SUITABILITY = 0.30 ## 10 to 30
+
+# F13 fix: Rule score weights MUST mirror the training label formula so that
+# cold-start users (rule path) and returning users (ML path) are ranked by the
+# same relative priority. Training label = 0.6×gap + 0.3×interest + 0.1×community.
+# difficulty_suitability gets 0.05 to break ties sensibly; gap reduced by 0.05.
+#   Before: gap=0.30, interest=0.20, community=0.20, suitability=0.30 (sum=1.00)
+#   After:  gap=0.55, interest=0.30, community=0.10, suitability=0.05 (sum=1.00)
+WEIGHT_CAREER_GAP           = 0.55
+WEIGHT_INTEREST             = 0.30
+WEIGHT_COMMUNITY_APPROVAL   = 0.10
+WEIGHT_DIFFICULTY_SUITABILITY = 0.05
 
 # Backward-compatible aliases for older code paths.
 WEIGHT_SUBMISSION_COUNT     = WEIGHT_COMMUNITY_APPROVAL
