@@ -181,7 +181,9 @@ def compute_user_features(
 
     approved = df[df['is_approved'] == 1]
     feat['optimal_difficulty'] = (
-        float(approved['difficulty_level'].mean()) + 0.5
+        # F4 fix: clamp to [1.0, 4.0] — mean + 0.5 can exceed 4.0 for expert users,
+        # which breaks the Gaussian suitability formula in Problem 3 (score never reaches 1.0)
+        min(float(approved['difficulty_level'].mean()) + 0.5, 4.0)
         if len(approved) > 0 else 1.5
     )
 
