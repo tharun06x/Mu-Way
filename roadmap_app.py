@@ -418,12 +418,13 @@ def generate_roadmap(muid: str, name: str, role: str,
 
         # Per-domain task cap: prevent any single low-gap domain (e.g. testing_qa)
         # from flooding the pool and pushing high-gap domains off the roadmap.
-        # Allow proportionally more tasks for domains with bigger gaps.
+        # groupby().head() is used instead of groupby().apply() because apply()
+        # can drop the group-key column ('domain') in pandas >= 2.2 causing KeyError.
         MAX_TASKS_PER_DOMAIN = 4
         available = (
             available
-            .groupby('domain', group_keys=False)
-            .apply(lambda g: g.head(MAX_TASKS_PER_DOMAIN))
+            .groupby('domain', sort=False)
+            .head(MAX_TASKS_PER_DOMAIN)
             .reset_index(drop=True)
         )
         # Re-sort after groupby reorders
