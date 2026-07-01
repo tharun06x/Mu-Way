@@ -327,6 +327,19 @@ class RankingModel:
             if 'rule_score' in pairs.columns:
                 return pairs['rule_score'].to_numpy(dtype=float)
             raise ValueError('Model not trained and no rule_score fallback is available.')
+        # Feature-mismatch guard: if the saved model was trained on a different
+        # set of features (e.g. old model with task_role_relevance/domain_importance)
+        # it will crash with KeyError. Detect this and fall back to rule_score.
+        missing = [f for f in self.feature_names if f not in pairs.columns]
+        if missing:
+            logger.warning(
+                f'Stale model: features {missing} missing from current pairs. '
+                f'Falling back to rule_score. Please retrain the model with '
+                f'`python problem3_runner.py` to restore ML scoring.'
+            )
+            if 'rule_score' in pairs.columns:
+                return pairs['rule_score'].to_numpy(dtype=float)
+            return np.zeros(len(pairs))
         return self.model.predict(pairs[self.feature_names])
 
     def save(self, path):
@@ -337,7 +350,19 @@ class RankingModel:
     @staticmethod
     def load(path):
         with open(path, 'rb') as f:
-            return pickle.load(f)
+            obj = pickle.load(f)
+        # Validate that the persisted model's features match the current code.
+        # If they diverge (e.g. after a bug fix removed constant features),
+        # discard the model so the caller falls back to rule_score gracefully.
+        if hasattr(obj, 'feature_names') and obj.feature_names != FEATURE_NAMES:
+            logger.warning(
+                f'Loaded model feature_names {obj.feature_names} do not match '
+                f'current FEATURE_NAMES {FEATURE_NAMES}. '
+                f'Model discarded — run `python problem3_runner.py` to retrain.'
+            )
+            obj.model = None          # zero out the GBR so predict() falls back
+            obj.feature_names = FEATURE_NAMES
+        return obj
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
