@@ -159,6 +159,10 @@ domain_token_map:
   - igpages
   - pvghack25
   - ibhk25
+  - vite
+  - visiting-card
+  - 3-route
+  - campaign
   mobile:
   - android
   - kotlin
@@ -172,6 +176,10 @@ domain_token_map:
   - firebase
   - flutterfire
   - flutterbloc
+  - My-first-app
+  - My-second-app
+  - myfirstapp
+  - mysecondapp
   devops:
   - dop
   - devops
@@ -317,6 +325,9 @@ domain_token_map:
   - roadmap
   - scrum
   - agile
+  - productmanagement
+  - okr
+  - systemsmap
   business:
   - hr
   - entrp
@@ -329,6 +340,10 @@ domain_token_map:
   ignored:
   - easteregghunt
   - autocrat
+  - defensive-driving
+  - find-better
+  - change-the-look
+  - website-redesign
   - content
   - tinkercad
   - creative
@@ -421,6 +436,12 @@ domain_token_map:
   - csharp
   - build
   - buildnship
+  - command-line
+  - commandline
+  - scratch
+  - networking
+  - what-is-networking
+  - findaproblem
   tooling:
   - github
   - open
@@ -430,21 +451,125 @@ domain_token_map:
   - qa
   - testing
   ignored:
+  # ── Community karma / non-technical tasks ──
   - daily-chat-karma
   - extra-karma
   - referral
-  - muid
-  - discord
-  - intro
-  - pledge
+  - flagging-karma
+  - chat-karma
+  - karma
+  - volunteering
+  - participation
+  - organizer
+  - organiser
+  - mentoring
+  - moderation
+  - speaker
+  - influencer
+  - management-contribution
+  - tech-contributor
+  - creative-contributor
+  - content-writer
+  - student-engagement
+  - interestgroup-contribution
+  - partner-connect
+  - skip
+  - follow
+  - wikisyllabus
+  - aot
+  - muonam
+  - onam
+  - pookkalam
+  - easteregghunt
+  - marathon
+  - weeklytwitch
+  - hackARthon
+  - hackathon
+  - permute
+  - mountaincall
+  - nasa
+  - google-aipro
+  - google-sc
+  - solution-challenge
+  # ── MuLearn platform events ──
+  - musprint
+  - musprint25
+  - illumunate
+  - illumunate24
+  - illumunate25
+  - muonam-organiser
+  - muonam-2021
+  # ── Launchpad program tasks ──
+  - lp24
+  - launchpad
+  # ── Top 100 Hackerrank challenges ──
+  - thc
+  - hackerrank
+  - top100
+  # ── KF / Design Week / Media tasks ──
+  - kf
+  - kf1
+  - designweek
+  - devweek
+  - muv
+  - cl-cm
+  - cl-muv
+  - cl-sl
+  - cl-dm
+  - cl-tw
+  - cl-sih
+  # ── Digital marketing bootcamp ──
+  - dmb
+  - digitalmarketing
+  # ── Typing challenges ──
   - typing-challenge
   - typing
+  # ── YIP / VOC / VOS ──
   - yip
+  - yip5
+  - yip6
   - voc
   - vos
+  # ── Misc community ──
+  - discord
+  - muid
+  - pledge
   - story
   - goals
   - rankcard
+  - blog
+  - lifestyle
+  - jobs
+  - professionalism
+  - interpersonal
+  - obtainanappropriatejob
+  - problemsolving
+  - speaking
+  - failed
+  - genesis
+  - qseverse
+  - interestgroup
+  - contribution
+  - 30days
+  - 30dayscodingchallenge
+  - artwork
+  - cm
+  - muv
+  - muembed
+  - dfk
+  - tfp
+  - tfp2
+  - dwms
+  - lf
+  - aami
+  - linkedin
+  - msft
+  - copilot
+  - 21cld
+  - autocrat
+  - autocrat-automation
+  - wikisyllabus
+  - ge-msft
 structural_tokens:
 - cl
 - ge

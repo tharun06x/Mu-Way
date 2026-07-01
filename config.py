@@ -98,9 +98,9 @@ ROLE_REQUIREMENTS = {
     },
     'Backend Developer': {
         'core_programming':(0.90, 0.35),
-        'dsa':           (0.85, 0.25),
-        'data_eng':      (0.70, 0.20),
-        'devops':        (0.65, 0.15),
+        'dsa':           (0.85, 0.30),
+        'web_dev':       (0.75, 0.20),   # REST APIs, HTTP, server-side — replaces data_eng (0 catalog tasks)
+        'devops':        (0.65, 0.10),
         'testing_qa':    (0.70, 0.05),
     },
     'Frontend Developer': {
