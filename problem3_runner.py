@@ -432,19 +432,20 @@ def recommend_for_user(
     for dom in config.DOMAINS:
         sub_count = user_dict.get(f'task_count_{dom}', 0)
         interest  = user_dict.get(f'interest_{dom}', 0.0)
-        if sub_count > 0 or interest > 0.0:
+        mastery   = user_dict.get(f'mastery_{dom}', 0.0)
+        gap       = 1.0 - mastery
+        # Bug fix: include ALL domains where the user has activity OR a gap > 0.
+        # Previously zero-activity domains were skipped entirely, so a user with
+        # 0 data_eng submissions but a 0.70 raw gap got ZERO data_eng recommendations.
+        if sub_count > 0 or interest > 0.0 or gap > 0.01:
             uf_records.append({
                 'user_id': user_id,
                 'domain': dom,
                 'submission_count': sub_count,
-                'mastery': user_dict.get(f'mastery_{dom}', 0.0),
-                'gap_score': 1.0 - user_dict.get(f'mastery_{dom}', 0.0),
-                'approval_rate': user_dict.get('global_approval_rate', 0.70),  # BUG-5 fix: was '_approval_conf' (key does not exist)
+                'mastery': mastery,
+                'gap_score': gap,
+                'approval_rate': user_dict.get('global_approval_rate', 0.70),
                 'optimal_difficulty': user_dict.get('optimal_difficulty', 1.5),
-                # BUG-11 fix: interest_score must not be inverted.
-                # Previously: interest if interest > 0.0 else 1.0
-                # This boosted zero-interest domains to 1.0, ranking them HIGHER
-                # than genuinely interested domains. Fix: use the actual score.
                 'interest_score': max(interest, 0.0),
             })
             

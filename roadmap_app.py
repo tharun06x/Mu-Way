@@ -399,19 +399,37 @@ def generate_roadmap(muid: str, name: str, role: str,
             diff_score = diff if diff >= next_diff else diff + 10
             return diff_score
 
-        available['difficulty_order'] = available.apply(sort_key, axis=1)
-        available['domain_priority']  = available['domain'].map(domain_priority).fillna(99)
-        
-        # Apply ML Score Threshold
-        available = available[available['score'] >= 0.05]
+        # Attach gap tier to drive sort order: CRITICAL gaps must lead the roadmap
+        # regardless of domain_priority index position.
+        gap_data = gap.get('domain_gaps', {})
+        def weighted_gap_for_domain(dom):
+            return gap_data.get(dom, {}).get('weighted_gap', 0.0)
 
-        # Apply Difficulty Floor
-        available = available[available['difficulty_level'] >= available.apply(lambda r: next_difficulty(r['domain']), axis=1) - 1.0]
-        
-        # Sort by Domain Priority -> Difficulty Progression -> ML Score
+        available['difficulty_order'] = available.apply(sort_key, axis=1)
+        available['weighted_gap'] = available['domain'].apply(weighted_gap_for_domain)
+        available['domain_priority']  = available['domain'].map(domain_priority).fillna(99)
+
+
+        # Sort: highest weighted_gap first → then domain priority → then difficulty → then score
         available = available.sort_values(
-            ['domain_priority', 'difficulty_order', 'score'], 
-            ascending=[True, True, False]
+            ['weighted_gap', 'domain_priority', 'difficulty_order', 'score'],
+            ascending=[False, True, True, False]
+        )
+
+        # Per-domain task cap: prevent any single low-gap domain (e.g. testing_qa)
+        # from flooding the pool and pushing high-gap domains off the roadmap.
+        # Allow proportionally more tasks for domains with bigger gaps.
+        MAX_TASKS_PER_DOMAIN = 4
+        available = (
+            available
+            .groupby('domain', group_keys=False)
+            .apply(lambda g: g.head(MAX_TASKS_PER_DOMAIN))
+            .reset_index(drop=True)
+        )
+        # Re-sort after groupby reorders
+        available = available.sort_values(
+            ['weighted_gap', 'domain_priority', 'difficulty_order', 'score'],
+            ascending=[False, True, True, False]
         )
         
         for _, t in available.iterrows():
