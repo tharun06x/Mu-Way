@@ -145,10 +145,15 @@ with st.sidebar:
     st.divider()
 
     ROLES = [
-        "AI/ML Engineer", "Data Scientist", "Full Stack Developer",
-        "Backend Developer", "Frontend Developer", "DevOps Engineer",
-        "Cybersecurity Analyst", "Mobile Developer", "Data Analyst",
+        # ── Core roles (match config.ROLE_REQUIREMENTS exactly) ── #
+        "AI/ML Engineer", "Data Scientist", "Data Analyst",
+        "Full Stack Developer", "Backend Developer", "Frontend Developer",
+        "Mobile Developer", "DevOps Engineer", "Cybersecurity Analyst",
         "Game Developer", "Product Manager", "UI/UX Designer",
+        # ── Specialist roles ── #
+        "Data Engineer", "Cloud Architect", "Blockchain Developer",
+        "IoT Engineer", "Systems Engineer", "Hardware Engineer",
+        "Quantum Researcher",
     ]
 
     st.markdown("### 👤 User Details")

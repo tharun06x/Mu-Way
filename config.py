@@ -66,12 +66,14 @@ GAP_TIER_MODERATE = 0.01
 GAP_TIER_MARGINAL = 0.001
 
 ROLE_REQUIREMENTS = {
-    'AI Engineer': {
-        'ai':            (0.90, 0.40),
-        'genai':         (0.80, 0.25),
-        'data_science':  (0.80, 0.15),
+    # ── Core Engineering Roles (matching Streamlit UI labels exactly) ── #
+    'AI/ML Engineer': {
+        'ai':            (0.90, 0.35),
+        'genai':         (0.80, 0.20),
+        'maths':         (0.85, 0.15),
+        'data_science':  (0.75, 0.15),
         'data_eng':      (0.60, 0.10),
-        'devops':        (0.50, 0.10),
+        'devops':        (0.50, 0.05),
     },
     'Data Scientist': {
         'data_science':  (0.95, 0.50),
@@ -80,12 +82,32 @@ ROLE_REQUIREMENTS = {
         'ai':            (0.60, 0.10),
         'core_programming':(0.70, 0.05),
     },
+    'Data Analyst': {
+        'data_analytics':(0.95, 0.50),
+        'data_science':  (0.70, 0.20),
+        'business':      (0.60, 0.15),
+        'core_programming':(0.60, 0.10),
+        'tooling':       (0.50, 0.05),
+    },
     'Full Stack Developer': {
         'web_dev':       (0.95, 0.50),
         'dsa':           (0.75, 0.20),
         'devops':        (0.60, 0.15),
         'testing_qa':    (0.80, 0.10),
         'tooling':       (0.80, 0.05),
+    },
+    'Backend Developer': {
+        'core_programming':(0.90, 0.35),
+        'dsa':           (0.85, 0.25),
+        'data_eng':      (0.70, 0.20),
+        'devops':        (0.65, 0.15),
+        'testing_qa':    (0.70, 0.05),
+    },
+    'Frontend Developer': {
+        'web_dev':       (0.95, 0.55),
+        'ux':            (0.75, 0.25),
+        'testing_qa':    (0.70, 0.10),
+        'tooling':       (0.65, 0.10),
     },
     'Mobile Developer': {
         'mobile':        (0.95, 0.60),
@@ -100,7 +122,7 @@ ROLE_REQUIREMENTS = {
         'data_eng':      (0.50, 0.10),
         'tooling':       (0.90, 0.05),
     },
-    'Security Engineer': {
+    'Cybersecurity Analyst': {
         'cybersec':      (0.95, 0.60),
         'devops':        (0.75, 0.20),
         'web_dev':       (0.60, 0.15),
@@ -118,18 +140,6 @@ ROLE_REQUIREMENTS = {
         'product':       (0.60, 0.15),
         'business':      (0.50, 0.05),
     },
-    'Blockchain Developer': {
-        'blockchain':    (0.95, 0.50),
-        'cybersec':      (0.75, 0.20),
-        'web_dev':       (0.60, 0.15),
-        'dsa':           (0.70, 0.15),
-    },
-    'IoT Engineer': {
-        'iot':           (0.95, 0.50),
-        'devops':        (0.60, 0.20),
-        'web_dev':       (0.50, 0.15),
-        'data_eng':      (0.50, 0.15),
-    },
     'Product Manager': {
         'product':       (0.95, 0.40),
         'business':      (0.85, 0.30),
@@ -137,19 +147,13 @@ ROLE_REQUIREMENTS = {
         'data_analytics':(0.60, 0.10),
         'core_programming':(0.60, 0.05),
     },
+    # ── Specialist Roles (also available, not shown in UI by default) ── #
     'Quantum Researcher': {
         'quantum_comp':  (0.95, 0.40),
         'maths':         (0.85, 0.30),
         'dsa':           (0.80, 0.15),
         'data_science':  (0.60, 0.10),
         'ai':            (0.50, 0.05),
-    },
-    'Machine Learning Engineer': {
-        'ai':            (0.95, 0.40),
-        'genai':         (0.80, 0.20),
-        'maths':         (0.85, 0.15),
-        'devops':        (0.70, 0.15),
-        'data_eng':      (0.60, 0.10),
     },
     'Data Engineer': {
         'data_eng':      (0.95, 0.50),
@@ -164,6 +168,18 @@ ROLE_REQUIREMENTS = {
         'web_dev':       (0.60, 0.10),
         'business':      (0.60, 0.05),
     },
+    'Blockchain Developer': {
+        'blockchain':    (0.95, 0.50),
+        'cybersec':      (0.75, 0.20),
+        'web_dev':       (0.60, 0.15),
+        'dsa':           (0.70, 0.15),
+    },
+    'IoT Engineer': {
+        'iot':           (0.95, 0.50),
+        'devops':        (0.60, 0.20),
+        'web_dev':       (0.50, 0.15),
+        'data_eng':      (0.50, 0.15),
+    },
     'Systems Engineer': {
         'dsa':           (0.90, 0.40),
         'devops':        (0.80, 0.25),
@@ -176,19 +192,19 @@ ROLE_REQUIREMENTS = {
         'iot':           (0.85, 0.20),
         'dsa':           (0.60, 0.15),
         'core_programming':(0.70, 0.05),
-    }
+    },
 }
 
 DOMAIN_TO_ROLE = {
-    'ai':            'AI Engineer',
-    'genai':         'AI Engineer',
+    'ai':            'AI/ML Engineer',
+    'genai':         'AI/ML Engineer',
     'data_science':  'Data Scientist',
-    'data_analytics':'Data Scientist',
+    'data_analytics':'Data Analyst',
     'data_eng':      'Data Engineer',
     'web_dev':       'Full Stack Developer',
     'mobile':        'Mobile Developer',
     'devops':        'DevOps Engineer',
-    'cybersec':      'Security Engineer',
+    'cybersec':      'Cybersecurity Analyst',
     'game_dev':      'Game Developer',
     'quantum_comp':  'Quantum Researcher',
     'blockchain':    'Blockchain Developer',
@@ -196,12 +212,12 @@ DOMAIN_TO_ROLE = {
     'ux':            'UI/UX Designer',
     'product':       'Product Manager',
     'business':      'Product Manager',
-    'dsa':           'Systems Engineer',
+    'dsa':           'Backend Developer',
     'low_code':      'Product Manager',
     'maths':         'Quantum Researcher',
     'cloud':         'Cloud Architect',
     'hardware':      'Hardware Engineer',
-    'core_programming': 'Full Stack Developer',
+    'core_programming': 'Backend Developer',
     'tooling':       'DevOps Engineer',
     'testing_qa':    'Full Stack Developer',
 }
