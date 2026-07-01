@@ -429,6 +429,22 @@ domain_token_map:
   testing_qa:
   - qa
   - testing
+  ignored:
+  - daily-chat-karma
+  - extra-karma
+  - referral
+  - muid
+  - discord
+  - intro
+  - pledge
+  - typing-challenge
+  - typing
+  - yip
+  - voc
+  - vos
+  - story
+  - goals
+  - rankcard
 structural_tokens:
 - cl
 - ge
