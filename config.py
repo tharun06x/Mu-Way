@@ -90,21 +90,22 @@ ROLE_REQUIREMENTS = {
         'tooling':       (0.50, 0.05),
     },
     'Full Stack Developer': {
-        'web_dev':       (0.95, 0.50),
+        'web_frontend':  (0.85, 0.25),
+        'web_backend':   (0.90, 0.25),
         'dsa':           (0.75, 0.20),
         'devops':        (0.60, 0.15),
         'testing_qa':    (0.80, 0.10),
         'tooling':       (0.80, 0.05),
     },
     'Backend Developer': {
-        'core_programming':(0.90, 0.35),
+        'core_programming':(0.90, 0.30),
         'dsa':           (0.85, 0.30),
-        'web_dev':       (0.75, 0.20),   # REST APIs, HTTP, server-side — replaces data_eng (0 catalog tasks)
+        'web_backend':   (0.80, 0.25),   # Node, APIs, server-side tasks only
         'devops':        (0.65, 0.10),
         'testing_qa':    (0.70, 0.05),
     },
     'Frontend Developer': {
-        'web_dev':       (0.95, 0.55),
+        'web_frontend':  (0.95, 0.55),   # CSS, HTML, React, animations
         'ux':            (0.75, 0.25),
         'testing_qa':    (0.70, 0.10),
         'tooling':       (0.65, 0.10),
@@ -112,12 +113,12 @@ ROLE_REQUIREMENTS = {
     'Mobile Developer': {
         'mobile':        (0.95, 0.60),
         'ux':            (0.60, 0.15),
-        'web_dev':       (0.50, 0.15),
+        'web_frontend':  (0.50, 0.15),   # UI/layout skills transfer to mobile
         'testing_qa':    (0.70, 0.10),
     },
     'DevOps Engineer': {
         'devops':        (0.95, 0.50),
-        'web_dev':       (0.70, 0.20),
+        'web_backend':   (0.70, 0.20),   # Server/API knowledge needed
         'cybersec':      (0.65, 0.15),
         'data_eng':      (0.50, 0.10),
         'tooling':       (0.90, 0.05),
@@ -125,7 +126,7 @@ ROLE_REQUIREMENTS = {
     'Cybersecurity Analyst': {
         'cybersec':      (0.95, 0.60),
         'devops':        (0.75, 0.20),
-        'web_dev':       (0.60, 0.15),
+        'web_backend':   (0.60, 0.15),   # Web app security knowledge
         'tooling':       (0.80, 0.05),
     },
     'Game Developer': {
@@ -136,7 +137,7 @@ ROLE_REQUIREMENTS = {
     },
     'UI/UX Designer': {
         'ux':            (0.95, 0.60),
-        'web_dev':       (0.50, 0.20),
+        'web_frontend':  (0.50, 0.20),   # HTML/CSS/layout knowledge
         'product':       (0.60, 0.15),
         'business':      (0.50, 0.05),
     },
@@ -165,19 +166,19 @@ ROLE_REQUIREMENTS = {
         'cloud':         (0.95, 0.50),
         'devops':        (0.85, 0.20),
         'cybersec':      (0.75, 0.15),
-        'web_dev':       (0.60, 0.10),
+        'web_backend':   (0.60, 0.10),   # API/service knowledge
         'business':      (0.60, 0.05),
     },
     'Blockchain Developer': {
         'blockchain':    (0.95, 0.50),
         'cybersec':      (0.75, 0.20),
-        'web_dev':       (0.60, 0.15),
+        'web_backend':   (0.60, 0.15),   # Smart contract / dApp server logic
         'dsa':           (0.70, 0.15),
     },
     'IoT Engineer': {
         'iot':           (0.95, 0.50),
         'devops':        (0.60, 0.20),
-        'web_dev':       (0.50, 0.15),
+        'web_backend':   (0.50, 0.15),   # IoT APIs and dashboards
         'data_eng':      (0.50, 0.15),
     },
     'Systems Engineer': {
@@ -201,7 +202,8 @@ DOMAIN_TO_ROLE = {
     'data_science':  'Data Scientist',
     'data_analytics':'Data Analyst',
     'data_eng':      'Data Engineer',
-    'web_dev':       'Full Stack Developer',
+    'web_backend':   'Backend Developer',
+    'web_frontend':  'Frontend Developer',
     'mobile':        'Mobile Developer',
     'devops':        'DevOps Engineer',
     'cybersec':      'Cybersecurity Analyst',
@@ -228,7 +230,8 @@ DOMAIN_DISPLAY_NAMES = {
     'data_science':  'Data Science',
     'data_analytics':'Data Analytics',
     'data_eng':      'Data Engineering',
-    'web_dev':       'Web Development',
+    'web_backend':   'Web Development (Backend)',
+    'web_frontend':  'Web Development (Frontend)',
     'mobile':        'Mobile Development',
     'devops':        'Cloud & DevOps',
     'cybersec':      'Cyber Security',
@@ -254,10 +257,11 @@ DOMAIN_PREREQUISITES = {
     'tooling': ['core_programming'],
     'testing_qa': ['core_programming'],
     'dsa': ['core_programming'],
-    'web_dev': ['core_programming', 'dsa'],
-    'mobile': ['web_dev'],
-    'devops': ['web_dev', 'tooling'],
-    'cybersec': ['devops', 'web_dev'],
+    'web_backend': ['core_programming', 'dsa'],
+    'web_frontend': ['core_programming'],
+    'mobile': ['web_frontend'],
+    'devops': ['web_backend', 'tooling'],
+    'cybersec': ['devops', 'web_backend'],
     'data_analytics': ['core_programming'],
     'data_eng': ['data_analytics', 'core_programming'],
     'data_science': ['data_analytics', 'dsa'],
@@ -265,8 +269,8 @@ DOMAIN_PREREQUISITES = {
     'genai': ['ai'],
     'game_dev': ['dsa', 'core_programming'],
     'quantum_comp': ['data_science', 'dsa'],
-    'blockchain': ['web_dev', 'cybersec'],
-    'iot': ['core_programming', 'web_dev'],
+    'blockchain': ['web_backend', 'cybersec'],
+    'iot': ['core_programming', 'web_backend'],
     'ux': [],
     'business': [],
     'product': ['business', 'ux'],

@@ -106,63 +106,90 @@ domain_token_map:
   - airflow
   - pipeline
   - etl
-  web_dev:
-  - web
-  - react
-  - beweb
-  - frontend
+  web_backend:
+  # Server-side, APIs, full-stack application tasks
   - backend
-  - javascript
-  - js
-  - html
-  - css
-  - fullstack
   - node
   - nodejs
-  - biographypage
-  - bouncingballs
-  - chromeai25
-  - clientsidewebapi
-  - communityhomepage
-  - ecommerce
-  - events
-  - forms
-  - fundamentalcss
-  - imagegallery
-  - layoutcomprehension
-  - markingupaletter
-  - music
-  - notifications
+  - fullstack
   - odinfullstack
-  - odinintro
-  - profilepage
-  - projectblog
-  - quiz
-  - responsive
-  - sequenceanimations
-  - sillystorygenerator
-  - smartnotes
-  - splashpage
-  - structuredplanetdata
   - therapist
-  - vibeui
-  - weather
+  - chatapp
+  - notesapp
+  - smartnotes
+  - projectblog
+  - ecommerce
+  - notifications
+  - gitapi
   - aivoiceinterview
   - budgetapp
-  - chatapp
-  - movieapp
-  - portfolio
-  - tictactoe
-  - todo
-  - youtube
+  - chromeai25
   - campus-execom
+  - campus
+  - execom
   - igpages
   - pvghack25
   - ibhk25
+  - mobapp
+  - weather
+  - movieapp
+  - tictactoe
+  - todo
+  - youtube
+  - quiz
+  - chromeex
+  - gclone
+  - airbnb
+  - memegen
+  - passengercount
+  - quizgame
+  - biscard
+  - reactinfo
+  - spaceex
+  - bdaygift
+  - blackjack
+  - buildjack
+  - clientsidewebapi
+  - forms
+  - music
+  web_frontend:
+  # HTML/CSS/UI/animations/layout/design tasks
+  # Note: 'web' is a structural token (prefix), not listed here
+  - html
+  - css
+  - javascript
+  - js
+  - react
+  - beweb
+  - frontend
+  - responsive
+  - cssflex
+  - fundamentalcss
+  - layoutcomprehension
+  - markingupaletter
+  - communityhomepage
+  - biographypage
+  - bouncingballs
+  - sequenceanimations
+  - sillystorygenerator
+  - splashpage
+  - structuredplanetdata
+  - imagegallery
+  - vibeui
+  - portfolio
+  - profilepage
+  - odinintro
   - vite
   - visiting-card
   - 3-route
   - campaign
+  - firstweb
+  - createstat
+  - stylestat
+  - devenvironment
+  - pt1
+  - pt2
+  - pt3
   mobile:
   - android
   - kotlin
@@ -425,22 +452,18 @@ domain_token_map:
   - pcb
   - vlsi
   core_programming:
-  - general
-  - intro
-  - basics
-  - fundamental
+  # Genuine programming / CS fundamentals tasks only
   - programming
   - python
   - coding
   - snakify
   - csharp
-  - build
   - buildnship
   - command-line
   - commandline
   - scratch
-  - networking
-  - what-is-networking
+  - tinkercad
+  - tinkercadbasics
   - findaproblem
   tooling:
   - github
@@ -458,6 +481,24 @@ domain_token_map:
   - flagging-karma
   - chat-karma
   - karma
+  # ── Platform onboarding tasks (not technical skills) ──
+  - self-intro
+  - intro-to-github
+  - intro-to-markdown
+  - intro-to-discord
+  - intro-to-mulearn
+  - intro-to-scratch
+  - intro-to-html
+  - intro
+  - general
+  - basics
+  - fundamental
+  - build
+  - networking
+  - what-is-networking
+  - build-from-home
+  - lvl0
+  - self
   - volunteering
   - participation
   - organizer
@@ -579,3 +620,12 @@ structural_tokens:
 - and
 - of
 - the
+- web
+- thm
+- mv
+- vt
+- lp25
+- lp
+- tfp
+- tfp2
+- thd
