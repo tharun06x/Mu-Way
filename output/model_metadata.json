@@ -1,19 +1,20 @@
 {
   "metrics": {
-    "train_r2": 1.0,
-    "train_size": 904900,
-    "test_size": 222998,
-    "ndcg": 1.0,
-    "test_r2": 0.9999
+    "train_r2": 0.4305,
+    "train_size": 278547,
+    "test_size": 74522,
+    "ndcg": 0.9448,
+    "test_r2": 0.4317
   },
   "features": [
     "gap_score",
     "interest_score",
+    "semantic_relevance",
     "community_approval",
     "difficulty_suitability",
     "gap_interest",
     "approval_probability",
     "task_count_in_domain"
   ],
-  "timestamp": "2026-07-06 19:55:15.492551"
+  "timestamp": "2026-07-08 23:08:49.459968"
 }
