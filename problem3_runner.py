@@ -115,7 +115,7 @@ def engineer_task_features(
         tf['domain'] = tf['domain'].apply(
             lambda x: hashtag_to_domain(x) if pd.notna(x) else 'general'
         )
-        tf = tf[tf['domain'] != 'ignored'].copy()
+        tf = tf[~tf['domain'].isin(['ignored', 'general'])].copy()
     else:
         tf['domain'] = 'general'
 
@@ -454,7 +454,7 @@ def recommend_for_user(
         # B6 fix: broaden cold-start fallback to ALL non-ignored domains so
         # new users receive recommendations across the full task catalog,
         # not just 'general' which may have no tasks after domain filtering.
-        fallback_domains = [d for d in config.DOMAINS if d != 'ignored']
+        fallback_domains = [d for d in config.DOMAINS if d not in ('ignored', 'general')]
         uf = pd.DataFrame([
             {
                 'user_id': user_id,

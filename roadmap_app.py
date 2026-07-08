@@ -329,10 +329,14 @@ def generate_roadmap(muid: str, name: str, role: str,
     td['domain_mapped'] = td['domain'].apply(hashtag_to_domain)
     td['_task_key'] = td['task_name'].apply(_normalize_task_name)
 
-    # Keep only tasks relevant to this role
-    role_tasks = td[td['domain_mapped'].isin(all_role_domains)].copy()
+    # Keep only tasks relevant to this role; also strip unmapped 'general' tasks
+    role_tasks = td[
+        td['domain_mapped'].isin(all_role_domains) &
+        ~td['domain_mapped'].isin(['ignored', 'general'])
+    ].copy()
     if len(role_tasks) == 0:
-        role_tasks = td.copy()    # last resort fallback
+        role_tasks = td[~td['domain_mapped'].isin(['ignored', 'general'])].copy()   # last resort fallback
+
 
     # ── Fix 1: Exclude already-done tasks ─────────────────── #
     done_tasks: set = set()
