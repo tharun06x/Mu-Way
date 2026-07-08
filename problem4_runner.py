@@ -254,12 +254,13 @@ def build_roadmap_for_user(
         dmap = task_data.set_index('task_name')['difficulty_level'].to_dict()
         recs['difficulty_level'] = recs['task_name'].map(dmap).fillna(2.0).astype(float)
 
-    # Step 1: urgency tiering
-    recs = _assign_urgency(recs, domain_gaps)
-    sort_cols = [c for c in ['urgency_order', 'domain_priority',
-                             'difficulty_order', 'difficulty_level', 'score']
-                 if c in recs.columns]
-    ascending = [True, True, True, True, False][:len(sort_cols)]
+    # Step 1: Sort primarily by ML score (descending), then difficulty (ascending)
+    sort_cols = ['score', 'difficulty_level']
+    # If the df happens to be missing 'score', fallback
+    if 'score' not in recs.columns:
+        sort_cols = ['difficulty_level']
+    
+    ascending = [False, True][:len(sort_cols)]
     recs = recs.sort_values(sort_cols, ascending=ascending)
 
     # Step 2: difficulty progression constraint

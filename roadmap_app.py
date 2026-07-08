@@ -400,41 +400,25 @@ def generate_roadmap(muid: str, name: str, role: str,
             dom  = row['domain']
             diff = float(row.get('difficulty_level', 2.0))
             next_diff = next_difficulty(dom)
+            # Penalize tasks that are below the user's current level
             diff_score = diff if diff >= next_diff else diff + 10
             return diff_score
 
-        # Attach gap tier to drive sort order: CRITICAL gaps must lead the roadmap
-        # regardless of domain_priority index position.
-        gap_data = gap.get('domain_gaps', {})
-        def weighted_gap_for_domain(dom):
-            return gap_data.get(dom, {}).get('weighted_gap', 0.0)
-
         available['difficulty_order'] = available.apply(sort_key, axis=1)
-        available['weighted_gap'] = available['domain'].apply(weighted_gap_for_domain)
-        available['domain_priority']  = available['domain'].map(domain_priority).fillna(99)
 
-
-        # Sort: highest weighted_gap first → then domain priority → then difficulty → then score
+        # Sort primarily by ML score. If scores are tied, use difficulty order.
         available = available.sort_values(
-            ['weighted_gap', 'domain_priority', 'difficulty_order', 'score'],
-            ascending=[False, True, True, False]
+            ['score', 'difficulty_order'],
+            ascending=[False, True]
         )
 
-        # Per-domain task cap: prevent any single low-gap domain (e.g. testing_qa)
-        # from flooding the pool and pushing high-gap domains off the roadmap.
-        # groupby().head() is used instead of groupby().apply() because apply()
-        # can drop the group-key column ('domain') in pandas >= 2.2 causing KeyError.
+        # Per-domain task cap: prevent any single domain from flooding the pool.
         MAX_TASKS_PER_DOMAIN = 4
         available = (
             available
             .groupby('domain', sort=False)
             .head(MAX_TASKS_PER_DOMAIN)
             .reset_index(drop=True)
-        )
-        # Re-sort after groupby reorders
-        available = available.sort_values(
-            ['weighted_gap', 'domain_priority', 'difficulty_order', 'score'],
-            ascending=[False, True, True, False]
         )
         
         for _, t in available.iterrows():
@@ -446,7 +430,7 @@ def generate_roadmap(muid: str, name: str, role: str,
                 'difficulty_level': diff,
                 'difficulty_order': t['difficulty_order'],
                 'difficulty_label': DIFFICULTY_LABELS.get(int(diff), 'Intermediate'),
-                'domain_priority':  t['domain_priority'],
+                'domain_priority':  99,
                 'gap_score':        max(0.0, role_reqs.get(t['domain'], (0.5, 0.1))[0] - mastery.get(t['domain'], 0.0)),
                 'score':            round(t['score'], 4),
                 'reason':           t['reason'],
