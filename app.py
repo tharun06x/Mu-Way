@@ -22,6 +22,8 @@ import time
 import numpy as np
 import pandas as pd
 import streamlit as st
+import config
+
 
 # ── Page config ─────────────────────────────────────────────────────────────── #
 st.set_page_config(
@@ -118,11 +120,13 @@ section[data-testid="stSidebar"] { background: rgba(15,12,41,0.85); border-right
 # ── Domain icons & colours ───────────────────────────────────────────────────── #
 DOMAIN_ICONS = {
     "ai": "🤖", "data_science": "📊", "data_analytics": "📈",
-    "web_dev": "🌐", "mobile": "📱", "devops": "⚙️",
+    "web_frontend": "🎨", "web_backend": "🖥️", "mobile": "📱", "devops": "⚙️",
     "cybersec": "🔒", "dsa": "🧮", "game_dev": "🎮",
     "genai": "✨", "blockchain": "⛓️", "iot": "📡",
     "quantum_comp": "⚛️", "ux": "🎨", "low_code": "🧩",
-    "product": "📋", "business": "💼", "general": "📚",
+    "product": "📋", "business": "💼", "data_eng": "🔧",
+    "maths": "📐", "cloud": "☁️", "hardware": "🔩",
+    "core_programming": "💻", "tooling": "🛠️", "testing_qa": "🧪",
 }
 TIER_COLOURS = {"CRITICAL": "#ff4757", "MODERATE": "#ffa502", "MARGINAL": "#2ed573", "MET": "#57606f"}
 
@@ -312,7 +316,7 @@ if run and data_ok:
             for dom, info in domain_gaps_raw.items():
                 if isinstance(info, dict):
                     gap_data.append({
-                        "Domain": f"{DOMAIN_ICONS.get(dom,'📚')} {dom}",
+                        "Domain": f"{DOMAIN_ICONS.get(dom,'📚')} {config.DOMAIN_DISPLAY_NAMES.get(dom, dom.replace('_',' ').title())}",
                         "Current": info.get("current", 0),
                         "Required": info.get("required", 0),
                         "Gap": info.get("raw_gap", 0),

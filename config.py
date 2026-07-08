@@ -32,7 +32,7 @@ WARM_UP_THRESHOLD        = 5     # min submissions before full ML pipeline
 
 DOMAINS = [
     'ai', 'genai', 'data_science', 'data_analytics', 'data_eng',
-    'web_dev', 'mobile', 'devops', 'cybersec',
+    'web_frontend', 'web_backend', 'mobile', 'devops', 'cybersec',
     'dsa', 'game_dev', 'quantum_comp', 'blockchain', 'iot',
     'ux', 'low_code', 'product', 'business',
     'maths', 'cloud', 'hardware',
