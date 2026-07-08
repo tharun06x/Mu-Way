@@ -252,6 +252,36 @@ DOMAIN_DISPLAY_NAMES = {
     'testing_qa':    'Testing & QA',
 }
 
+DOMAIN_DESCRIPTIONS = {
+    'ai': 'artificial intelligence machine learning deep learning neural network computer vision nlp model training',
+    'genai': 'generative ai llm gpt chatgpt transformer prompt engineering text generation',
+    'data_science': 'data science machine learning statistics modeling prediction clustering regression pandas',
+    'data_analytics': 'data analytics visualization sql dashboard excel bi tableau report powerbi metrics',
+    'data_eng': 'data engineering pipeline etl spark kafka airflow database warehouse big data',
+    'web_frontend': 'web frontend html css javascript react ui ux layout animation responsive design',
+    'web_backend': 'web backend node api server rest database express fullstack',
+    'mobile': 'mobile android ios flutter react native app smartphone kotlin swift',
+    'devops': 'devops docker kubernetes cloud ci cd linux deployment container server orchestration',
+    'cybersec': 'cyber security hacking network defense vulnerability penetration testing firewall',
+    'dsa': 'data structures algorithms sorting searching tree graph array linked list leetcode logic',
+    'game_dev': 'game development unity unreal c# c++ physics rendering sprite 3d 2d',
+    'quantum_comp': 'quantum computing qubit physics qiskit entanglement mechanics',
+    'blockchain': 'blockchain web3 crypto smart contract ethereum solidity decentralized dapps',
+    'iot': 'iot internet of things sensors hardware embedded raspberry pi arduino microcontroller',
+    'ux': 'ui ux user interface user experience wireframe prototype figma design layout typography',
+    'low_code': 'low code no code automation workflow visual builder integration',
+    'product': 'product management agile scrum roadmap backlog strategy features user stories',
+    'business': 'business startup entrepreneurship marketing sales finance strategy management',
+    'maths': 'mathematics statistics linear algebra calculus probability equation logic',
+    'cloud': 'cloud aws azure gcp serverless architecture storage compute networking',
+    'hardware': 'hardware electronics pcb vlsi circuits systems microcontroller sensors',
+    'core_programming': 'programming coding python c++ java basics fundamentals syntax variables logic',
+    'tooling': 'git github version control bash terminal linux command line environment setup',
+    'testing_qa': 'testing qa quality assurance unit test integration selenium automated bugs',
+    'general': '',
+    'ignored': ''
+}
+
 DOMAIN_PREREQUISITES = {
     'core_programming': [],
     'tooling': ['core_programming'],
@@ -293,7 +323,8 @@ TOP_K_RECOMMENDATIONS       = 5
 #   After:  gap=0.55, interest=0.30, community=0.10, suitability=0.05 (sum=1.00)
 WEIGHT_CAREER_GAP           = 0.55
 WEIGHT_INTEREST             = 0.30
-WEIGHT_COMMUNITY_APPROVAL   = 0.10
+WEIGHT_SEMANTIC_RELEVANCE   = 0.08
+WEIGHT_COMMUNITY_APPROVAL   = 0.02
 WEIGHT_DIFFICULTY_SUITABILITY = 0.05
 
 # Backward-compatible aliases for older code paths.

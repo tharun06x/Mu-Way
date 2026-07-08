@@ -25,9 +25,14 @@ try:
     from sklearn.ensemble import GradientBoostingRegressor
     from sklearn.metrics import ndcg_score
     from sklearn.model_selection import GroupShuffleSplit
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
     SKLEARN_AVAILABLE = True
 except ImportError:
     GradientBoostingRegressor = None
+    TfidfVectorizer = None
+    cosine_similarity = None
+
     GroupShuffleSplit = None
     SKLEARN_AVAILABLE = False
 
@@ -119,7 +124,30 @@ def engineer_task_features(
     else:
         tf['domain'] = 'general'
 
+    # Compute TF-IDF Semantic Relevance
+    if SKLEARN_AVAILABLE and TfidfVectorizer is not None:
+        tf['semantic_relevance'] = 0.0
+        # Compute relevance per domain to avoid cross-domain noise
+        for dom, grp in tf.groupby('domain'):
+            desc = config.DOMAIN_DESCRIPTIONS.get(dom, '')
+            if not desc or len(grp) == 0:
+                continue
+            
+            # Combine domain desc + task names for vectorization
+            texts = [desc] + grp['task_name'].tolist()
+            try:
+                vec = TfidfVectorizer(stop_words='english')
+                tfidf_matrix = vec.fit_transform(texts)
+                # Compute cosine similarity between desc (index 0) and tasks (index 1:)
+                sims = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
+                tf.loc[grp.index, 'semantic_relevance'] = np.clip(sims, 0, 1)
+            except Exception as e:
+                logger.warning(f"TF-IDF failed for domain {dom}: {e}")
+    else:
+        tf['semantic_relevance'] = 0.5  # fallback
+        
     return tf
+
 
 
 def create_domain_matched_pairs(
@@ -170,13 +198,25 @@ def engineer_advanced_features(pairs: pd.DataFrame) -> pd.DataFrame:
     return pairs
 
 
-def generate_labels(pairs: pd.DataFrame) -> pd.DataFrame:
-    """Synthetic labels: 0.6×gap + 0.3×interest + 0.1×community_approval, scaled 0-4."""
-    pairs['label'] = (
-        0.6 * pairs['gap_score'] +
-        0.3 * pairs['interest_score'] +
-        0.1 * pairs['community_approval']
-    )
+def generate_labels(pairs: pd.DataFrame, user_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Temporal mastery gain labels (real historical interactions):
+    Label = task_difficulty if the user historically completed the task, else 0.
+    This replaces the synthetic rule-based label with actual skill-gain signals.
+    """
+    approved = user_data[user_data['is_approved'] == 1][['user_id', 'task_name']].copy()
+    # Drop duplicates in case a user submitted the same task multiple times
+    approved = approved.drop_duplicates()
+    approved['is_completed'] = 1.0
+
+    pairs = pairs.merge(approved, on=['user_id', 'task_name'], how='left')
+    pairs['is_completed'] = pairs['is_completed'].fillna(0.0)
+    
+    # Mastery gain correlates strongly with the difficulty of the completed task
+    pairs['label'] = pairs['is_completed'] * pairs['difficulty_level'].astype(float)
+    
+    pairs = pairs.drop(columns=['is_completed'])
+
     mx = pairs['label'].max()
     if mx > 0:
         pairs['label'] = 4 * (pairs['label'] / mx)
@@ -185,9 +225,14 @@ def generate_labels(pairs: pd.DataFrame) -> pd.DataFrame:
 
 def compute_rule_score(pairs: pd.DataFrame) -> pd.DataFrame:
     """Stage A rule-based score (spec weights)."""
+    # Fallback for semantic_relevance if it wasn't generated
+    if 'semantic_relevance' not in pairs.columns:
+        pairs['semantic_relevance'] = 0.5
+
     pairs['rule_score'] = (
         config.WEIGHT_CAREER_GAP       * pairs['gap_score'] +
         config.WEIGHT_INTEREST         * pairs['interest_score'] +
+        config.WEIGHT_SEMANTIC_RELEVANCE * pairs['semantic_relevance'] +
         config.WEIGHT_COMMUNITY_APPROVAL * pairs['community_approval'] +
         config.WEIGHT_DIFFICULTY_SUITABILITY * pairs['difficulty_suitability']
     )
@@ -221,7 +266,7 @@ def prepare_recommendation_data(
     pairs = engineer_advanced_features(pairs)
     logger.info(f'  Adv. features : {time.time()-t0:.1f}s')
 
-    pairs = generate_labels(pairs)
+    pairs = generate_labels(pairs, udata)
     pairs = compute_rule_score(pairs)
 
     logger.info(f'✓ Ready: {len(pairs):,} pairs')
@@ -233,7 +278,7 @@ def prepare_recommendation_data(
 # ─────────────────────────────────────────────────────────────────────────── #
 
 FEATURE_NAMES = [
-    'gap_score', 'interest_score', 'community_approval',
+    'gap_score', 'interest_score', 'semantic_relevance', 'community_approval',
     'difficulty_suitability', 'gap_interest', 'approval_probability',
     'task_count_in_domain',
     # BUG-7 fix: removed 'task_role_relevance' and 'domain_importance' —
