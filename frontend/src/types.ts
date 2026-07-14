@@ -5,6 +5,8 @@
  * IDE autocomplete for roadmap data throughout the frontend.
  */
 
+// ── Core Gap & Roadmap ───────────────────────────────────────────────────── //
+
 export interface DomainGap {
   current: number;
   required: number;
@@ -24,6 +26,14 @@ export interface GapData {
   domain_gaps_json?: string;
 }
 
+export interface TaskResource {
+  title: string;
+  url: string;
+  type: 'video' | 'course' | 'docs' | 'practice';
+  platform: string;
+  is_free: boolean;
+}
+
 export interface RoadmapTask {
   task_name: string;
   domain: string;
@@ -32,6 +42,7 @@ export interface RoadmapTask {
   difficulty_order?: number;
   score: number;
   is_bridge?: boolean;
+  resources?: TaskResource[];  // Enriched learning links
 }
 
 export interface RoadmapWeek {
@@ -83,6 +94,89 @@ export interface SubmittedTask {
   submission_date: string;
 }
 
+// ── New: Progress Forecast ───────────────────────────────────────────────── //
+
+export interface AdaptiveGoal {
+  recommended_hours: number;
+  recommended_tasks: number;
+  completion_rate_7d: number;
+  burnout_risk: 'LOW' | 'MEDIUM' | 'HIGH';
+  motivation: string;
+}
+
+export interface ProgressForecast {
+  user_id: string;
+  dream_role: string;
+  current_readiness_pct: number;
+  career_gap: number;
+  weeks_to_goal: number;
+  estimated_completion_date: string;
+  weekly_gap_closure_rate: number;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  message: string;
+  adaptive_goal?: AdaptiveGoal;
+}
+
+// ── New: Achievements & Gamification ────────────────────────────────────── //
+
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  earned: boolean;
+  earned_date: string | null;
+}
+
+export interface AchievementProfile {
+  user_id: string;
+  xp: number;
+  level: number;
+  level_title: string;
+  xp_to_next_level: number;
+  current_streak_days: number;
+  longest_streak_days: number;
+  total_approved: number;
+  total_submitted: number;
+  active_days: number;
+  badges: Badge[];
+  next_milestone: string;
+}
+
+// ── New: Skill Decay ─────────────────────────────────────────────────────── //
+
+export interface DomainDecayInfo {
+  raw_mastery: number;
+  decayed_mastery: number;
+  days_inactive: number;
+  retention_factor: number;
+  is_rusty: boolean;
+  rust_severity: 'NONE' | 'MILD' | 'MODERATE' | 'SEVERE';
+}
+
+export interface DecayProfile {
+  user_id: string;
+  overall_retention: number;
+  rusty_domains: string[];
+  domains: Record<string, DomainDecayInfo>;
+}
+
+// ── New: Multi-Role Comparison ───────────────────────────────────────────── //
+
+export interface RoleComparisonResult {
+  role_a: string;
+  role_b: string;
+  gap_a: GapData;
+  gap_b: GapData;
+  forecast_a: ProgressForecast;
+  forecast_b: ProgressForecast;
+  recommendation: string;
+  shared_domains: string[];
+  switching_cost_weeks: number;
+}
+
+// ── Full API Response ─────────────────────────────────────────────────────── //
+
 export interface RoadmapApiResponse {
   success: boolean;
   muid: string;
@@ -93,4 +187,18 @@ export interface RoadmapApiResponse {
   roadmap: Roadmap;
   known_user: boolean;
   submitted_tasks: SubmittedTask[];
+  // New fields from upgrade:
+  forecast: ProgressForecast | null;
+  achievements: AchievementProfile | null;
+  decay_profile: DecayProfile | null;
+}
+
+export interface CompareRolesApiResponse {
+  success: boolean;
+  comparison: RoleComparisonResult;
+}
+
+export interface InsightsApiResponse {
+  success: boolean;
+  achievements: AchievementProfile;
 }

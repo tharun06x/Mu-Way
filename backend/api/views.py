@@ -2,14 +2,11 @@
 api/views.py — Django REST API views for the ICRS backend.
 
 Design decisions:
-  - Data is loaded lazily on first request (not at module import time), so
-    `manage.py migrate`, `collectstatic`, and test collection all work without
-    a live database.
-  - A thread-safe double-checked locking pattern ensures data is loaded exactly
-    once, even under concurrent first requests.
+  - Data is loaded lazily on first request (not at module import time).
+  - A thread-safe double-checked locking pattern ensures data is loaded once.
   - Input validation added: muid length, JSON parse guard, role guard.
   - Structured logging replaces all print() statements.
-  - @csrf_exempt removed; the API is protected via CORS allowlist in settings.
+  - New endpoints: /compare_roles, /insights
 """
 import json
 import logging
@@ -30,22 +27,14 @@ if str(ROOT) not in sys.path:
 logger = logging.getLogger(__name__)
 
 # ── Lazy, thread-safe data cache ──────────────────────────────────────────── #
-# All data lives here once loaded; never re-loaded while the server runs.
-# Access is protected by _LOCK to handle concurrent first requests safely.
-
 _LOCK = threading.Lock()
 _CACHE: dict = {}
 
 
 def _ensure_data_loaded() -> tuple:
-    """
-    Load and cache user_data, task_data, and task_features_cache.
-    Thread-safe via double-checked locking.
-    Returns (user_data, task_data, task_features_cache) or raises on failure.
-    """
+    """Thread-safe lazy data loader. Loads once, cached forever."""
     if 'user_data' not in _CACHE:
         with _LOCK:
-            # Second check inside lock (double-checked locking pattern)
             if 'user_data' not in _CACHE:
                 logger.info("Loading data from database (first request)…")
                 from core.loader import DataLoader
@@ -63,27 +52,36 @@ def _ensure_data_loaded() -> tuple:
     return _CACHE['user_data'], _CACHE['task_data'], _CACHE['task_features']
 
 
-# ── API Views ─────────────────────────────────────────────────────────────── #
+def _parse_json_body(request) -> tuple[dict | None, JsonResponse | None]:
+    """Parse and return JSON body, or return (None, error_response)."""
+    try:
+        return json.loads(request.body), None
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        logger.warning(f"Invalid JSON body: {exc}")
+        return None, JsonResponse({"detail": "Request body must be valid JSON."}, status=400)
+
+
+# ── Main Roadmap Endpoint ─────────────────────────────────────────────────── #
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_generate_roadmap(request):
     """
     POST /generate_roadmap
-    Body: { "muid": str, "name": str (optional), "role": str }
-    Returns a full personalised career roadmap.
+    Body: { "muid": str, "name": str (optional), "role": str,
+            "enable_decay": bool (optional, default true),
+            "enrich_tasks": bool (optional, default true) }
+    Returns a full personalised career roadmap with achievements and forecast.
     """
-    # ── Parse body ────────────────────────────────────────────────────────── #
-    try:
-        body = json.loads(request.body)
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        logger.warning(f"Invalid JSON body: {exc}")
-        return JsonResponse({"detail": "Request body must be valid JSON."}, status=400)
+    body, err = _parse_json_body(request)
+    if err:
+        return err
 
-    # ── Validate inputs ───────────────────────────────────────────────────── #
     muid = str(body.get('muid', '')).strip()
     name = str(body.get('name', '')).strip()
     role = str(body.get('role', '')).strip()
+    enable_decay = body.get('enable_decay', True)
+    enrich = body.get('enrich_tasks', True)
 
     if not muid:
         return JsonResponse({"detail": "muid is required."}, status=400)
@@ -95,20 +93,14 @@ def api_generate_roadmap(request):
         return JsonResponse({"detail": "role must be 200 characters or fewer."}, status=400)
 
     if not name:
-        # Derive a sensible display name from the MUID
         name = muid.split('@')[0].capitalize()
 
-    # ── Load data (lazy) ──────────────────────────────────────────────────── #
     try:
         user_data, task_data, task_features_cache = _ensure_data_loaded()
     except Exception:
         logger.exception("Data loading failed")
-        return JsonResponse(
-            {"detail": "Service unavailable: could not load data. Please try again later."},
-            status=503,
-        )
+        return JsonResponse({"detail": "Service unavailable — data loading failed."}, status=503)
 
-    # ── Generate roadmap ─────────────────────────────────────────────────── #
     try:
         from core.pipeline import generate_roadmap
 
@@ -119,20 +111,65 @@ def api_generate_roadmap(request):
         )
     except Exception:
         logger.exception(f"Roadmap generation failed for muid={muid!r}")
-        return JsonResponse(
-            {"detail": "Internal error during roadmap generation."},
-            status=500,
+        return JsonResponse({"detail": "Internal error during roadmap generation."}, status=500)
+
+    # ── Enrich roadmap tasks with learning resources ──────────────────── #
+    roadmap = result.get("roadmap", {})
+    if enrich and roadmap and roadmap.get('roadmap_weeks'):
+        try:
+            from core.services.enrichment_service import enrich_roadmap_weeks
+            roadmap['roadmap_weeks'] = enrich_roadmap_weeks(roadmap['roadmap_weeks'])
+        except Exception as exc:
+            logger.warning(f"Task enrichment failed (non-fatal): {exc}")
+
+    # ── Skill Decay Profile ───────────────────────────────────────────── #
+    decay_profile = None
+    if enable_decay:
+        try:
+            from core.ml.decay import apply_decay_to_features
+            from core.features import compute_user_features
+            user_subs = user_data[user_data['user_id'] == muid].copy() if not user_data.empty else pd.DataFrame()
+            if not user_subs.empty:
+                user_feats = compute_user_features(muid, user_subs, pd.Timestamp.now())
+                _, profile = apply_decay_to_features(user_feats, user_subs)
+                decay_profile = profile.to_dict()
+        except Exception as exc:
+            logger.warning(f"Decay profile computation failed (non-fatal): {exc}")
+
+    # ── Progress Forecast ─────────────────────────────────────────────── #
+    forecast = None
+    try:
+        from core.ml.forecaster import compute_progress_forecast, AdaptiveGoalEngine
+        gap_data = result.get("gap", {})
+        user_subs_for_forecast = user_data[user_data['user_id'] == muid].copy() if not user_data.empty else pd.DataFrame()
+        forecast_obj = compute_progress_forecast(muid, gap_data, user_subs_for_forecast)
+        forecast = forecast_obj.to_dict()
+
+        goal_engine = AdaptiveGoalEngine()
+        adaptive_goal = goal_engine.compute_goal(
+            user_subs_for_forecast,
+            gap_data.get('career_gap_tier', 'MODERATE'),
         )
+        forecast['adaptive_goal'] = adaptive_goal.to_dict()
+    except Exception as exc:
+        logger.warning(f"Forecast computation failed (non-fatal): {exc}")
 
-    # ── Serialize response ───────────────────────────────────────────────── #
+    # ── Achievement Profile ───────────────────────────────────────────── #
+    achievements = None
+    try:
+        from core.services.achievements_service import compute_achievements
+        user_subs_achv = user_data[user_data['user_id'] == muid].copy() if not user_data.empty else pd.DataFrame()
+        achv_profile = compute_achievements(muid, user_subs_achv)
+        achievements = achv_profile.to_dict()
+    except Exception as exc:
+        logger.warning(f"Achievement computation failed (non-fatal): {exc}")
+
+    # ── Serialize Response ────────────────────────────────────────────── #
     gap_data = result.get("gap", {})
-
     recs_df = result.get("recs")
     recs_data = []
     if isinstance(recs_df, pd.DataFrame) and not recs_df.empty:
         recs_data = recs_df.head(10).to_dict(orient="records")
-
-    roadmap = result.get("roadmap", {})
 
     logger.info(
         f"Roadmap generated | muid={muid!r} | role={result.get('role')!r} | "
@@ -141,13 +178,97 @@ def api_generate_roadmap(request):
     )
 
     return JsonResponse({
-        "success": True,
-        "muid": muid,
-        "name": name,
-        "role": result.get("role", role),   # may have been normalized by pipeline
-        "gap": gap_data,
-        "recs": recs_data,
-        "roadmap": roadmap,
-        "known_user": result.get("known_user", False),
-        "submitted_tasks": result.get("submitted_tasks", []),
+        "success":          True,
+        "muid":             muid,
+        "name":             name,
+        "role":             result.get("role", role),
+        "gap":              gap_data,
+        "recs":             recs_data,
+        "roadmap":          roadmap,
+        "known_user":       result.get("known_user", False),
+        "submitted_tasks":  result.get("submitted_tasks", []),
+        "forecast":         forecast,
+        "achievements":     achievements,
+        "decay_profile":    decay_profile,
     })
+
+
+# ── Multi-Role Comparison Endpoint ────────────────────────────────────────── #
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_compare_roles(request):
+    """
+    POST /compare_roles
+    Body: { "muid": str, "role_a": str, "role_b": str }
+    Returns side-by-side gap analysis, forecasts, and a recommendation.
+    """
+    body, err = _parse_json_body(request)
+    if err:
+        return err
+
+    muid   = str(body.get('muid', '')).strip()
+    role_a = str(body.get('role_a', '')).strip()
+    role_b = str(body.get('role_b', '')).strip()
+
+    if not muid or not role_a or not role_b:
+        return JsonResponse({"detail": "muid, role_a, and role_b are required."}, status=400)
+    if role_a == role_b:
+        return JsonResponse({"detail": "role_a and role_b must be different."}, status=400)
+
+    try:
+        user_data, task_data, _ = _ensure_data_loaded()
+    except Exception:
+        return JsonResponse({"detail": "Service unavailable."}, status=503)
+
+    try:
+        from core.features import compute_user_features
+        from core.ml.forecaster import compare_roles
+        from core.config import settings as _cfg
+
+        user_subs = user_data[user_data['user_id'] == muid].copy() if not user_data.empty else pd.DataFrame()
+        user_feats = compute_user_features(muid, user_subs, pd.Timestamp.now())
+        user_mastery = {
+            dom: float(user_feats.get(f'mastery_{dom}', 0.0))
+            for dom in _cfg.DOMAINS
+        }
+
+        comparison = compare_roles(muid, user_mastery, role_a, role_b, user_subs)
+        return JsonResponse({"success": True, "comparison": comparison.to_dict()})
+
+    except Exception:
+        logger.exception(f"Role comparison failed for muid={muid!r}")
+        return JsonResponse({"detail": "Internal error during role comparison."}, status=500)
+
+
+# ── Insights / Achievements Endpoint ─────────────────────────────────────── #
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_insights(request):
+    """
+    POST /insights
+    Body: { "muid": str }
+    Returns the user's achievement profile, streak, XP, and badges.
+    """
+    body, err = _parse_json_body(request)
+    if err:
+        return err
+
+    muid = str(body.get('muid', '')).strip()
+    if not muid:
+        return JsonResponse({"detail": "muid is required."}, status=400)
+
+    try:
+        user_data, _, _ = _ensure_data_loaded()
+    except Exception:
+        return JsonResponse({"detail": "Service unavailable."}, status=503)
+
+    try:
+        from core.services.achievements_service import compute_achievements
+        user_subs = user_data[user_data['user_id'] == muid].copy() if not user_data.empty else pd.DataFrame()
+        profile = compute_achievements(muid, user_subs)
+        return JsonResponse({"success": True, "achievements": profile.to_dict()})
+    except Exception:
+        logger.exception(f"Insights failed for muid={muid!r}")
+        return JsonResponse({"detail": "Internal error computing insights."}, status=500)
