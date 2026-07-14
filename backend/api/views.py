@@ -20,6 +20,7 @@ import sys
 import pandas as pd
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 
 # Path bootstrap so Django can find the core module
 ROOT = Path(__file__).resolve().parent.parent
@@ -64,6 +65,7 @@ def _ensure_data_loaded() -> tuple:
 
 # ── API Views ─────────────────────────────────────────────────────────────── #
 
+@csrf_exempt
 @require_http_methods(["POST"])
 def api_generate_roadmap(request):
     """
