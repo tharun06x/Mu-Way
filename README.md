@@ -3,9 +3,7 @@ title: ICRS — Intelligent Career Roadmap System
 emoji: 🚀
 colorFrom: purple
 colorTo: indigo
-sdk: streamlit
-sdk_version: 1.30.0
-app_file: app.py
+sdk: docker
 pinned: false
 license: mit
 short_description: Personalised career roadmaps powered by ML on Mulearn data

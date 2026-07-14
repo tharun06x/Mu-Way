@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: mulearn-career-roadmap
-Version: 0.1.0
-Summary: Personalized career roadmap generator for Mulearn community members.
-Requires-Python: >=3.10
-Dynamic: requires-python
-Dynamic: summary
