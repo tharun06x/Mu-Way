@@ -3,36 +3,14 @@ import {
   Trophy, Star, CheckCircle2, Clock, Code2, Shield,
   BrainCircuit, Database, Smartphone, Activity, Cpu,
   BarChart2, Layers, ChevronDown, ChevronUp, Calendar,
-  Zap, Target, BookOpen, GitBranch
+  Zap, Target, BookOpen, GitBranch, Youtube, MonitorPlay, 
+  FileText, ExternalLink
 } from 'lucide-react';
 import './JourneyTimeline.css';
-
-interface Task {
-  task_name: string;
-  domain: string;
-  difficulty_level: number;
-  score: number;
-  urgency_tier?: string;
-  reason?: string;
-  complexity?: string;
-}
-
-interface SubmittedTask {
-  task_name: string;
-  domain: string;
-  difficulty_level: number;
-  is_approved: number;
-  submission_date: string;
-}
-
-interface Week {
-  week: number;
-  minutes_used: number;
-  tasks: Task[];
-}
+import type { RoadmapTask, RoadmapWeek, SubmittedTask, TaskResource } from '../types';
 
 interface RoadmapData {
-  roadmap_weeks: Week[];
+  roadmap_weeks: RoadmapWeek[];
 }
 
 interface JourneyTimelineProps {
@@ -42,33 +20,33 @@ interface JourneyTimelineProps {
 }
 
 const DOMAIN_META: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  web_frontend: { icon: <Code2 size={14} />, color: '#38bdf8', label: 'Frontend' },
-  web_backend:  { icon: <Code2 size={14} />, color: '#34d399', label: 'Backend' },
-  ai:           { icon: <BrainCircuit size={14} />, color: '#a78bfa', label: 'AI/ML' },
-  genai:        { icon: <BrainCircuit size={14} />, color: '#c084fc', label: 'GenAI' },
-  data_science: { icon: <BarChart2 size={14} />, color: '#fb923c', label: 'Data Science' },
-  data_analytics:{ icon: <BarChart2 size={14} />, color: '#fbbf24', label: 'Analytics' },
-  data_eng:     { icon: <Database size={14} />, color: '#60a5fa', label: 'Data Eng' },
-  mobile:       { icon: <Smartphone size={14} />, color: '#4ade80', label: 'Mobile' },
-  devops:       { icon: <Layers size={14} />, color: '#f87171', label: 'DevOps' },
-  cybersec:     { icon: <Shield size={14} />, color: '#e879f9', label: 'Cybersec' },
-  dsa:          { icon: <GitBranch size={14} />, color: '#93c5fd', label: 'DSA' },
-  cloud:        { icon: <Cpu size={14} />, color: '#67e8f9', label: 'Cloud' },
+  web_frontend: { icon: <Code2 size={16} />, color: '#3b82f6', label: 'Frontend' },
+  web_backend:  { icon: <Code2 size={16} />, color: '#059669', label: 'Backend' },
+  ai:           { icon: <BrainCircuit size={16} />, color: '#7c3aed', label: 'AI/ML' },
+  genai:        { icon: <BrainCircuit size={16} />, color: '#9333ea', label: 'GenAI' },
+  data_science: { icon: <BarChart2 size={16} />, color: '#ea580c', label: 'Data Science' },
+  data_analytics:{ icon: <BarChart2 size={16} />, color: '#d97706', label: 'Analytics' },
+  data_eng:     { icon: <Database size={16} />, color: '#2563eb', label: 'Data Eng' },
+  mobile:       { icon: <Smartphone size={16} />, color: '#16a34a', label: 'Mobile' },
+  devops:       { icon: <Layers size={16} />, color: '#dc2626', label: 'DevOps' },
+  cybersec:     { icon: <Shield size={16} />, color: '#c026d3', label: 'Cybersec' },
+  dsa:          { icon: <GitBranch size={16} />, color: '#0284c7', label: 'DSA' },
+  cloud:        { icon: <Cpu size={16} />, color: '#0891b2', label: 'Cloud' },
 };
 
 const getDomainMeta = (domain: string) => {
   const key = domain.toLowerCase().replace(/-/g, '_');
-  return DOMAIN_META[key] ?? { icon: <Activity size={14} />, color: '#94a3b8', label: domain };
+  return DOMAIN_META[key] ?? { icon: <Activity size={16} />, color: '#64748b', label: domain };
 };
 
 const DIFF_META = [
-  { label: 'Beginner',     bg: 'rgba(52,211,153,0.12)', color: '#34d399', border: 'rgba(52,211,153,0.3)' },
-  { label: 'Intermediate', bg: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: 'rgba(96,165,250,0.3)' },
-  { label: 'Advanced',     bg: 'rgba(251,146,60,0.12)', color: '#fb923c', border: 'rgba(251,146,60,0.3)' },
-  { label: 'Expert',       bg: 'rgba(248,113,113,0.12)', color: '#f87171', border: 'rgba(248,113,113,0.3)' },
+  { label: 'Beginner',     bg: 'rgba(5, 150, 105, 0.1)', color: '#059669' },
+  { label: 'Intermediate', bg: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' },
+  { label: 'Advanced',     bg: 'rgba(234, 88, 12, 0.1)', color: '#ea580c' },
+  { label: 'Expert',       bg: 'rgba(220, 38, 38, 0.1)',  color: '#dc2626' },
 ];
 
-const getDiff = (level: number) => DIFF_META[Math.min(Math.round(level) - 1, 3)] ?? DIFF_META[1];
+const getDiff = (level: number) => DIFF_META[Math.min(Math.max(Math.round(level) - 1, 0), 3)] ?? DIFF_META[1];
 
 const formatMinutes = (mins: number) => {
   if (mins < 60) return `${mins} min`;
@@ -77,57 +55,69 @@ const formatMinutes = (mins: number) => {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
-const scoreToPercent = (score: number) => `${Math.round(score * 100)}%`;
+// ── Resource Link Component ──
+const ResourceButton: React.FC<{ resource: TaskResource }> = ({ resource }) => {
+  let Icon = ExternalLink;
+  let typeClass = '';
+  
+  if (resource.platform.toLowerCase().includes('youtube')) {
+    Icon = Youtube;
+    typeClass = 'platform-youtube';
+  } else if (resource.platform.toLowerCase().includes('coursera')) {
+    Icon = MonitorPlay;
+    typeClass = 'platform-coursera';
+  } else if (resource.type === 'docs') {
+    Icon = FileText;
+    typeClass = 'platform-docs';
+  }
 
-// ── Collapsed Past Submissions row ──────────────────────────────────────────
+  return (
+    <a 
+      href={resource.url} 
+      target="_blank" 
+      rel="noopener noreferrer" 
+      className={`resource-btn ${typeClass}`}
+    >
+      <Icon size={12} />
+      {resource.platform}
+    </a>
+  );
+};
+
+// ── Collapsed Past Submissions row ──
 const PastSubmissionsNode: React.FC<{ tasks: SubmittedTask[] }> = ({ tasks }) => {
   const [expanded, setExpanded] = useState(false);
   const approved = tasks.filter(t => t.is_approved === 1).length;
   const pending  = tasks.length - approved;
 
   return (
-    <div className="tl-node past-node">
+    <div className="tl-node">
       <div className="tl-spine-dot done"><CheckCircle2 size={16} /></div>
-      <div className="tl-card past-card">
-        {/* Header — always visible */}
+      <div className="tl-card">
         <div className="past-header" onClick={() => setExpanded(e => !e)}>
-          <div className="past-header-left">
-            <span className="past-title">Completed Submissions</span>
+          <div>
+            <span className="past-title">Completed Foundation</span>
             <div className="past-stats">
-              <span className="past-stat approved"><CheckCircle2 size={12} /> {approved} approved</span>
-              {pending > 0 && <span className="past-stat pending"><Clock size={12} /> {pending} pending</span>}
-              <span className="past-stat total"><BookOpen size={12} /> {tasks.length} total</span>
+              <span className="past-stat"><CheckCircle2 size={12} className="text-green-600"/> {approved} approved</span>
+              {pending > 0 && <span className="past-stat"><Clock size={12} className="text-orange-500"/> {pending} pending</span>}
             </div>
           </div>
           <button className="expand-toggle">{expanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}</button>
         </div>
 
-        {/* Expandable task list */}
         {expanded && (
           <div className="past-task-list">
             {tasks.map((task, i) => {
               const dm = getDomainMeta(task.domain);
               const diff = getDiff(task.difficulty_level);
-              const dateStr = task.submission_date && task.submission_date !== 'NaT'
-                ? new Date(task.submission_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-                : null;
               return (
                 <div key={i} className="past-task-row">
-                  <div className="past-task-status">
-                    {task.is_approved === 1
-                      ? <CheckCircle2 size={14} color="#34d399" />
-                      : <Clock size={14} color="#fbbf24" />}
-                  </div>
-                  <div className="past-task-body">
-                    <span className="past-task-name">{task.task_name}</span>
-                    <div className="past-task-meta">
-                      <span className="domain-chip" style={{ color: dm.color, borderColor: `${dm.color}40`, background: `${dm.color}12` }}>
-                        {dm.icon} {dm.label}
-                      </span>
-                      <span className="diff-chip" style={{ color: diff.color, borderColor: diff.border, background: diff.bg }}>
-                        {diff.label}
-                      </span>
-                      {dateStr && <span className="date-chip"><Calendar size={11}/> {dateStr}</span>}
+                  {task.is_approved === 1 ? <CheckCircle2 size={16} color="#059669" /> : <Clock size={16} color="#ea580c" />}
+                  <div>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{task.task_name}</div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                      <span className="badge" style={{ color: dm.color, background: `${dm.color}15` }}>{dm.label}</span>
+                      <span className="badge" style={{ color: diff.color, background: diff.bg }}>{diff.label}</span>
                     </div>
                   </div>
                 </div>
@@ -140,7 +130,7 @@ const PastSubmissionsNode: React.FC<{ tasks: SubmittedTask[] }> = ({ tasks }) =>
   );
 };
 
-// ── Main component ───────────────────────────────────────────────────────────
+// ── Main component ──
 export const JourneyTimeline: React.FC<JourneyTimelineProps> = ({ data, dreamRole, submittedTasks }) => {
   if (!data || !data.roadmap_weeks || data.roadmap_weeks.length === 0) {
     return <div className="no-data">No roadmap tasks available to display.</div>;
@@ -152,20 +142,12 @@ export const JourneyTimeline: React.FC<JourneyTimelineProps> = ({ data, dreamRol
 
   return (
     <div className="tl-root">
+      
       {/* Summary bar */}
       <div className="tl-summary">
-        <div className="tl-summary-item"><Layers size={14}/> {weeks.length} weeks</div>
-        <div className="tl-summary-item"><Target size={14}/> {totalTasks} tasks</div>
-        <div className="tl-summary-item"><Clock size={14}/> {formatMinutes(totalMins)} total</div>
-        <div className="tl-summary-item"><Zap size={14}/> {dreamRole}</div>
-      </div>
-
-      {/* Vertical spine */}
-      <div className="tl-spine" />
-
-      {/* Journey start */}
-      <div className="tl-start-label">
-        <Star size={13} /> Journey Begins
+        <div className="tl-summary-item"><Layers size={16}/> {weeks.length} Weeks</div>
+        <div className="tl-summary-item"><Target size={16}/> {totalTasks} Tasks</div>
+        <div className="tl-summary-item"><Clock size={16}/> {formatMinutes(totalMins)}</div>
       </div>
 
       {/* Past submissions node */}
@@ -177,73 +159,62 @@ export const JourneyTimeline: React.FC<JourneyTimelineProps> = ({ data, dreamRol
       {weeks.map((week, wIdx) => {
         const isFirst = wIdx === 0;
         return (
-          <div key={week.week} className={`tl-node week-node ${isFirst ? 'first-week' : ''}`}>
+          <div key={week.week} className="tl-node">
             <div className={`tl-spine-dot ${isFirst ? 'active' : 'idle'}`}>
-              {isFirst ? <Star size={14} /> : <span className="dot-num">{week.week}</span>}
+              {isFirst ? <Star size={14} /> : week.week}
             </div>
-            <div className="tl-card week-card">
-              {/* Week header */}
+            
+            <div className="tl-card">
               <div className="week-header">
-                <div className="week-header-left">
+                <div>
                   <span className="week-label">Week {week.week}</span>
                   {isFirst && <span className="week-badge-now">▶ Up Next</span>}
                 </div>
                 <div className="week-meta-row">
-                  <span className="week-meta-item"><Clock size={12}/> {formatMinutes(week.minutes_used)}</span>
-                  <span className="week-meta-item"><Target size={12}/> {week.tasks.length} task{week.tasks.length !== 1 ? 's' : ''}</span>
+                  <span><Clock size={14}/> {formatMinutes(week.minutes_used)}</span>
+                  <span><Target size={14}/> {week.tasks.length} tasks</span>
                 </div>
               </div>
 
-              {/* Tasks */}
               <div className="week-task-list">
                 {week.tasks.map((task, tIdx) => {
-                  const dm   = getDomainMeta(task.domain);
+                  const dm = getDomainMeta(task.domain);
                   const diff = getDiff(task.difficulty_level);
-                  const score = task.score ?? 0;
 
                   return (
-                    <div key={tIdx} className="week-task-row">
-                      {/* Left accent bar coloured by domain */}
-                      <div className="task-accent" style={{ background: dm.color }} />
-
-                      <div className="task-body">
-                        {/* Task name row */}
-                        <div className="task-name-row">
-                          <span className="task-icon-wrap" style={{ color: dm.color }}>{dm.icon}</span>
-                          <span className="task-name-text">{task.task_name}</span>
+                    <div key={tIdx} className="task-card">
+                      <div className="task-header">
+                        <div className="task-title-group">
+                          <div className="task-icon" style={{ background: `${dm.color}15`, color: dm.color }}>
+                            {dm.icon}
+                          </div>
+                          <h4 className="task-name">{task.task_name}</h4>
                         </div>
-
-                        {/* Meta chips */}
-                        <div className="task-chips">
-                          <span className="domain-chip" style={{ color: dm.color, borderColor: `${dm.color}40`, background: `${dm.color}12` }}>
-                            {dm.label}
-                          </span>
-                          <span className="diff-chip" style={{ color: diff.color, borderColor: diff.border, background: diff.bg }}>
+                        <div className="task-meta-chips">
+                          <span className="badge" style={{ color: diff.color, background: diff.bg }}>
                             {diff.label}
                           </span>
-                          {task.urgency_tier && (
-                            <span className="urgency-chip">{task.urgency_tier}</span>
-                          )}
-                          {task.complexity && (
-                            <span className="complexity-chip">Complexity: {task.complexity}</span>
+                          {task.urgency_tier === 'CRITICAL' && (
+                            <span className="badge badge-red">Critical Focus</span>
                           )}
                         </div>
-
-                        {/* Score bar + reason */}
-                        <div className="task-score-row">
-                          <div className="score-bar-wrap">
-                            <div className="score-bar-track">
-                              <div
-                                className="score-bar-fill"
-                                style={{ width: scoreToPercent(score), background: dm.color }}
-                              />
-                            </div>
-                            <span className="score-label">ML Score {scoreToPercent(score)}</span>
+                      </div>
+                      
+                      <div className="task-body">
+                        {task.reason && (
+                          <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                            {task.reason}
                           </div>
-                          {task.reason && (
-                            <span className="task-reason">{task.reason}</span>
-                          )}
-                        </div>
+                        )}
+
+                        {/* Enrichment Resources */}
+                        {task.resources && task.resources.length > 0 && (
+                          <div className="task-resources">
+                            {task.resources.map((res, i) => (
+                              <ResourceButton key={i} resource={res} />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -256,12 +227,11 @@ export const JourneyTimeline: React.FC<JourneyTimelineProps> = ({ data, dreamRol
 
       {/* Dream role end node */}
       <div className="tl-end">
-        <div className="tl-end-icon"><Trophy size={28} color="#fbbf24" /></div>
-        <div className="tl-end-body">
-          <span className="tl-end-label">Dream Role Achieved</span>
-          <span className="tl-end-role">{dreamRole}</span>
-        </div>
+        <div className="tl-end-icon"><Trophy size={28} color="#ea580c" /></div>
+        <div className="tl-end-label">Goal Achieved</div>
+        <div className="tl-end-role">{dreamRole}</div>
       </div>
+      
     </div>
   );
 };

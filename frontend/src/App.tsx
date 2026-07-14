@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Rocket, User, Briefcase, ChevronRight } from 'lucide-react';
+import { Rocket, User, Briefcase, ChevronRight, Compass } from 'lucide-react';
 import { JourneyTimeline } from './components/JourneyTimeline';
+import { ProgressInsights } from './components/ProgressInsights';
 import type { RoadmapApiResponse } from './types';
 import './App.css';
 
-// Use dynamic hostname for backend in development (e.g. 192.168.x.x or localhost)
-// In production, use relative paths.
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : `http://${window.location.hostname}:8000`);
 
 const ROLES = [
@@ -56,7 +55,7 @@ function App() {
     } catch (err: any) {
       console.error(err);
       if (err.message === "Network Error") {
-        setError("Network error: Could not connect to the backend server. If you are on a different device, ensure the backend is running and accessible on the network.");
+        setError("Network error: Could not connect to the backend server.");
       } else {
         setError(err.response?.data?.detail || `Error: ${err.message}`);
       }
@@ -67,11 +66,11 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Header */}
+      {/* ── Global Header ── */}
       <header className="app-header">
         <div className="logo-container">
           <div className="logo-icon-bg">
-            <Rocket size={24} color="white" />
+            <Rocket size={16} color="white" />
           </div>
           <div className="logo-text">
             <h1>ICRS</h1>
@@ -82,26 +81,24 @@ function App() {
 
       <main className="main-content">
         
-        {/* Hero Section */}
+        {/* ── Setup / Hero State ── */}
         {!roadmapData && (
-          <div className="hero-section animate-float">
+          <div className="hero-section animate-fade-in">
             <div className="badge-powered-by">
               <span className="pulse-dot"></span>
-              <span>Powered by Mulearn</span>
+              <span>Powered by Mulearn ML</span>
             </div>
             
             <h1 className="hero-title">
-              Your personalised <span className="gradient-text">journey awaits</span>
+              Your personalised <br />
+              <em className="editorial">learning journey</em>
             </h1>
             
             <p className="hero-subtitle">
-              Enter your MUID and dream role to generate an ML-powered, week-by-week learning roadmap tailored exactly to your current skill level.
+              Enter your MUID and dream role. We'll analyze your past tasks, predict your learning velocity, and generate a tailored roadmap to get you there.
             </p>
 
-            {/* Input Form */}
-            <form onSubmit={handleGenerate} className="glass-card form-layout hero-form">
-              <div className="form-bg-glow"></div>
-              
+            <form onSubmit={handleGenerate} className="setup-form">
               {error && (
                 <div className="error-message">
                   {error}
@@ -111,15 +108,13 @@ function App() {
               <div className="form-group">
                 <label>Mulearn ID (MUID)</label>
                 <div className="input-icon-wrapper">
-                  <div className="input-icon">
-                    <User size={18} />
-                  </div>
+                  <div className="input-icon"><User size={16} /></div>
                   <input 
                     type="text" 
                     value={muid}
                     onChange={(e) => setMuid(e.target.value)}
                     className="input-field has-icon" 
-                    placeholder="user@mulearn" 
+                    placeholder="e.g. user@mulearn" 
                   />
                 </div>
               </div>
@@ -138,9 +133,7 @@ function App() {
               <div className="form-group">
                 <label>Dream Role</label>
                 <div className="input-icon-wrapper">
-                  <div className="input-icon">
-                    <Briefcase size={18} />
-                  </div>
+                  <div className="input-icon"><Briefcase size={16} /></div>
                   <select 
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
@@ -153,85 +146,56 @@ function App() {
                 </div>
               </div>
 
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="btn-primary submit-btn"
-              >
+              <button type="submit" disabled={loading} className="btn-primary submit-btn">
                 {loading ? (
                   <div className="spinner"></div>
                 ) : (
-                  <>
-                    Generate Roadmap
-                    <ChevronRight size={18} className="btn-icon" />
-                  </>
+                  <>Begin Journey <ChevronRight size={16} /></>
                 )}
               </button>
             </form>
           </div>
         )}
 
-        {/* Results Section */}
+        {/* ── Dashboard Layout ── */}
         {roadmapData && (
-          <div className="results-section">
+          <div className="dashboard-layout animate-fade-in">
             
-            <div className="results-header">
-              <div className="results-title-group">
-                <h2>
-                  Roadmap for <span>{roadmapData.name}</span>
-                </h2>
-                <p>Targeting: <strong>{roadmapData.role}</strong></p>
-              </div>
-              
-              <button 
-                onClick={() => setRoadmapData(null)}
-                className="btn-outline"
-              >
-                New Search
-              </button>
-            </div>
-
-            {/* KPIs */}
-            <div className="kpi-grid">
-              <div className="stat-card">
-                <div className="stat-value">{roadmapData.gap?.readiness_pct?.toFixed(0) || 0}%</div>
-                <div className="stat-label">Readiness</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">{roadmapData.roadmap?.roadmap_weeks?.length || 0}</div>
-                <div className="stat-label">Weeks Planned</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">
-                  {roadmapData.roadmap?.roadmap_weeks?.reduce((acc: number, w: any) => acc + w.tasks.length, 0) || 0}
+            {/* Left Sidebar (Context) */}
+            <aside className="sidebar">
+              <div className="card profile-card">
+                <h2>{roadmapData.name}</h2>
+                <div className="role-target">Target: <strong>{roadmapData.role}</strong></div>
+                <div className="action-row">
+                  <button onClick={() => setRoadmapData(null)} className="btn-secondary w-full">
+                    Change Role
+                  </button>
                 </div>
-                <div className="stat-label">Total Tasks</div>
               </div>
-              <div className="stat-card">
-                <div className="tier-badge-container">
-                  <span className={`badge ${roadmapData.gap?.career_gap_tier === 'CRITICAL' ? 'badge-red' : 'badge-orange'} tier-badge`}>
-                    {roadmapData.gap?.career_gap_tier || 'UNKNOWN'}
-                  </span>
-                </div>
-                <div className="stat-label">Gap Tier</div>
-              </div>
-            </div>
 
-            {/* Journey Timeline */}
-            <div className="timeline-wrapper">
-              <div className="timeline-header">
-                <h3>
-                  Your Learning Journey
-                  <div className="title-underline"></div>
-                </h3>
+              {/* Progress Insights Component */}
+              <ProgressInsights 
+                forecast={roadmapData.forecast} 
+                achievements={roadmapData.achievements} 
+                decayProfile={roadmapData.decay_profile} 
+                gapData={roadmapData.gap} 
+              />
+            </aside>
+
+            {/* Right Main Area (Journey) */}
+            <section className="journey-view">
+              <div className="journey-header">
+                <Compass size={24} className="text-brand mx-auto mb-2" />
+                <h3 className="editorial">Your Learning Map</h3>
+                <p>Follow the milestones to reach your goal.</p>
               </div>
-              
+
               <JourneyTimeline 
                 data={roadmapData.roadmap} 
                 dreamRole={roadmapData.role} 
                 submittedTasks={roadmapData.submitted_tasks} 
               />
-            </div>
+            </section>
             
           </div>
         )}
