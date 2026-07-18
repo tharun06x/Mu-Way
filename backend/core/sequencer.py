@@ -140,12 +140,13 @@ def _schedule_weeks(tasks: pd.DataFrame) -> list:
 
             # --- Add Task ---
             current_week['tasks'].append({
-                'task_name':    row.get('task_name', ''),
-                'domain':       domain,
-                'urgency_tier': urgency,
+                'task_name':       row.get('task_name', ''),
+                'domain':          domain,
+                'urgency_tier':    urgency,
                 'difficulty_level': float(row.get('difficulty_level', 2.0)),
                 'difficulty_order': float(row.get('difficulty_order', row.get('difficulty_level', 2.0))),
-                'score':        round(float(row.get('score', 0.0)), 4),
+                'score':           round(float(row.get('score', 0.0)), 4),
+                'markdown_detail': row.get('markdown_detail') or None,
             })
             current_week['minutes_used'] += task_mins
             week_domains[domain] = week_domains.get(domain, 0) + 1
@@ -259,6 +260,10 @@ def build_roadmap_for_user(
         recs['complexity'] = recs['task_name'].map(cmap).fillna('Medium')
         dmap = task_data.set_index('task_name')['difficulty_level'].to_dict()
         recs['difficulty_level'] = recs['task_name'].map(dmap).fillna(2.0).astype(float)
+        # Carry markdown_detail from catalog into recs so _schedule_weeks can include it
+        if 'markdown_detail' in task_data.columns:
+            mdmap = task_data.set_index('task_name')['markdown_detail'].to_dict()
+            recs['markdown_detail'] = recs['task_name'].map(mdmap)
 
     # Step 1: Sort primarily by ML score (descending), then difficulty (ascending)
     sort_cols = ['score', 'difficulty_level']

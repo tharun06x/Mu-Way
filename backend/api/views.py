@@ -7,6 +7,9 @@ Design decisions:
   - Input validation added: muid length, JSON parse guard, role guard.
   - Structured logging replaces all print() statements.
   - New endpoints: /compare_roles, /insights
+  - Roadmap persistence: generated roadmaps are saved to UserRoadmap.
+    Subsequent calls return the cached roadmap without running the ML pipeline.
+    Pass regenerate=true to force a fresh generation (deletes the old roadmap).
 """
 import json
 import logging
@@ -68,20 +71,30 @@ def _parse_json_body(request) -> tuple[dict | None, JsonResponse | None]:
 def api_generate_roadmap(request):
     """
     POST /generate_roadmap
-    Body: { "muid": str, "name": str (optional), "role": str,
-            "enable_decay": bool (optional, default true),
-            "enrich_tasks": bool (optional, default true) }
-    Returns a full personalised career roadmap with achievements and forecast.
+    Body: {
+        "muid": str,
+        "name": str (optional),
+        "role": str,
+        "enable_decay": bool (optional, default true),
+        "enrich_tasks": bool (optional, default true),
+        "regenerate": bool (optional, default false)
+    }
+
+    Behaviour:
+      - If a saved roadmap exists in DB and regenerate=false → return it instantly.
+      - If regenerate=true → delete old roadmap, run full ML pipeline, save new one.
+      - On first generation → run ML pipeline and save to DB.
     """
     body, err = _parse_json_body(request)
     if err:
         return err
 
-    muid = str(body.get('muid', '')).strip()
-    name = str(body.get('name', '')).strip()
-    role = str(body.get('role', '')).strip()
+    muid       = str(body.get('muid', '')).strip()
+    name       = str(body.get('name', '')).strip()
+    role       = str(body.get('role', '')).strip()
     enable_decay = body.get('enable_decay', True)
-    enrich = body.get('enrich_tasks', True)
+    enrich       = body.get('enrich_tasks', True)
+    regenerate   = bool(body.get('regenerate', False))
 
     if not muid:
         return JsonResponse({"detail": "muid is required."}, status=400)
@@ -95,12 +108,39 @@ def api_generate_roadmap(request):
     if not name:
         name = muid.split('@')[0].capitalize()
 
+    # ── Roadmap Persistence: Cache Check ──────────────────────────────────── #
+    from api.models import UserRoadmap
+
+    if not regenerate:
+        try:
+            saved = UserRoadmap.objects.filter(user_id=muid, role=role).first()
+            if saved:
+                logger.info(f"Returning cached roadmap | muid={muid!r} | role={role!r}")
+                cached_payload = saved.roadmap_data
+                # Inject the current name in case it changed
+                cached_payload['name'] = name
+                cached_payload['from_cache'] = True
+                return JsonResponse(cached_payload)
+        except Exception as exc:
+            logger.warning(f"Cache lookup failed (non-fatal, will regenerate): {exc}")
+
+    # ── If regenerate=True, delete the old roadmap first ─────────────────── #
+    if regenerate:
+        try:
+            deleted_count, _ = UserRoadmap.objects.filter(user_id=muid, role=role).delete()
+            if deleted_count:
+                logger.info(f"Deleted old roadmap | muid={muid!r} | role={role!r}")
+        except Exception as exc:
+            logger.warning(f"Failed to delete old roadmap (non-fatal): {exc}")
+
+    # ── Load in-memory data (with thread-safe lazy load) ──────────────────── #
     try:
         user_data, task_data, task_features_cache = _ensure_data_loaded()
     except Exception:
         logger.exception("Data loading failed")
         return JsonResponse({"detail": "Service unavailable — data loading failed."}, status=503)
 
+    # ── Run the ML Pipeline ───────────────────────────────────────────────── #
     try:
         from core.pipeline import generate_roadmap
 
@@ -113,7 +153,7 @@ def api_generate_roadmap(request):
         logger.exception(f"Roadmap generation failed for muid={muid!r}")
         return JsonResponse({"detail": "Internal error during roadmap generation."}, status=500)
 
-    # ── Enrich roadmap tasks with learning resources ──────────────────── #
+    # ── Enrich roadmap tasks with learning resources ──────────────────────── #
     roadmap = result.get("roadmap", {})
     if enrich and roadmap and roadmap.get('roadmap_weeks'):
         try:
@@ -122,7 +162,7 @@ def api_generate_roadmap(request):
         except Exception as exc:
             logger.warning(f"Task enrichment failed (non-fatal): {exc}")
 
-    # ── Skill Decay Profile ───────────────────────────────────────────── #
+    # ── Skill Decay Profile ───────────────────────────────────────────────── #
     decay_profile = None
     if enable_decay:
         try:
@@ -136,7 +176,7 @@ def api_generate_roadmap(request):
         except Exception as exc:
             logger.warning(f"Decay profile computation failed (non-fatal): {exc}")
 
-    # ── Progress Forecast ─────────────────────────────────────────────── #
+    # ── Progress Forecast ─────────────────────────────────────────────────── #
     forecast = None
     try:
         from core.ml.forecaster import compute_progress_forecast, AdaptiveGoalEngine
@@ -154,7 +194,7 @@ def api_generate_roadmap(request):
     except Exception as exc:
         logger.warning(f"Forecast computation failed (non-fatal): {exc}")
 
-    # ── Achievement Profile ───────────────────────────────────────────── #
+    # ── Achievement Profile ───────────────────────────────────────────────── #
     achievements = None
     try:
         from core.services.achievements_service import compute_achievements
@@ -164,7 +204,7 @@ def api_generate_roadmap(request):
     except Exception as exc:
         logger.warning(f"Achievement computation failed (non-fatal): {exc}")
 
-    # ── Serialize Response ────────────────────────────────────────────── #
+    # ── Serialize Response ────────────────────────────────────────────────── #
     gap_data = result.get("gap", {})
     recs_df = result.get("recs")
     recs_data = []
@@ -177,20 +217,36 @@ def api_generate_roadmap(request):
         f"readiness={gap_data.get('readiness_pct', 0):.1f}%"
     )
 
-    return JsonResponse({
-        "success":          True,
-        "muid":             muid,
-        "name":             name,
-        "role":             result.get("role", role),
-        "gap":              gap_data,
-        "recs":             recs_data,
-        "roadmap":          roadmap,
-        "known_user":       result.get("known_user", False),
-        "submitted_tasks":  result.get("submitted_tasks", []),
-        "forecast":         forecast,
-        "achievements":     achievements,
-        "decay_profile":    decay_profile,
-    })
+    response_payload = {
+        "success":         True,
+        "muid":            muid,
+        "name":            name,
+        "role":            result.get("role", role),
+        "gap":             gap_data,
+        "recs":            recs_data,
+        "roadmap":         roadmap,
+        "known_user":      result.get("known_user", False),
+        "submitted_tasks": result.get("submitted_tasks", []),
+        "forecast":        forecast,
+        "achievements":    achievements,
+        "decay_profile":   decay_profile,
+        "from_cache":      False,
+    }
+
+    # ── Persist Roadmap to DB ─────────────────────────────────────────────── #
+    # Normalise role before saving (pipeline may have corrected it)
+    saved_role = result.get("role", role)
+    try:
+        UserRoadmap.objects.update_or_create(
+            user_id=muid,
+            role=saved_role,
+            defaults={"roadmap_data": response_payload},
+        )
+        logger.info(f"Roadmap saved to DB | muid={muid!r} | role={saved_role!r}")
+    except Exception as exc:
+        logger.warning(f"Failed to save roadmap to DB (non-fatal): {exc}")
+
+    return JsonResponse(response_payload)
 
 
 # ── Multi-Role Comparison Endpoint ────────────────────────────────────────── #

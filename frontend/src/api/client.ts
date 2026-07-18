@@ -11,13 +11,19 @@ const apiClient = axios.create({
 });
 
 export const api = {
-  generateRoadmap: async (muid: string, name: string, role: string): Promise<RoadmapApiResponse> => {
+  generateRoadmap: async (
+    muid: string,
+    name: string,
+    role: string,
+    regenerate = false,
+  ): Promise<RoadmapApiResponse> => {
     const response = await apiClient.post<RoadmapApiResponse>('/generate_roadmap', {
       muid,
       name,
       role,
       enable_decay: true,
-      enrich_tasks: true
+      enrich_tasks: true,
+      regenerate,
     });
     return response.data;
   },
@@ -26,7 +32,7 @@ export const api = {
     const response = await apiClient.post<CompareRolesApiResponse>('/compare_roles', {
       muid,
       role_a: roleA,
-      role_b: roleB
+      role_b: roleB,
     });
     return response.data;
   },
@@ -34,5 +40,5 @@ export const api = {
   getInsights: async (muid: string): Promise<InsightsApiResponse> => {
     const response = await apiClient.post<InsightsApiResponse>('/insights', { muid });
     return response.data;
-  }
+  },
 };

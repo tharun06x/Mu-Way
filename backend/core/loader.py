@@ -38,15 +38,17 @@ class DataLoader:
                 'submission_date', 'is_approved', 'difficulty_level'
             ])
 
-        # Load task catalog
+        # Load task catalog (including markdown task descriptions)
         task_qs = TaskCatalog.objects.all().values(
-            'task_name', 'domain', 'task_karma_value', 'difficulty_level', 'task_type'
+            'task_name', 'domain', 'task_karma_value', 'difficulty_level', 'task_type',
+            'markdown_detail',
         )
         task_data = pd.DataFrame.from_records(task_qs)
         
         if task_data.empty:
             task_data = pd.DataFrame(columns=[
-                'task_name', 'domain', 'task_karma_value', 'difficulty_level', 'task_type'
+                'task_name', 'domain', 'task_karma_value', 'difficulty_level', 'task_type',
+                'markdown_detail',
             ])
 
         # ── Step 4: Empirical Bayesian Difficulty ─────────────── #

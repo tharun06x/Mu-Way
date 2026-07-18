@@ -42,8 +42,9 @@ export interface RoadmapTask {
   difficulty_order?: number;
   score: number;
   is_bridge?: boolean;
-  resources?: TaskResource[];  // Enriched learning links
+  resources?: TaskResource[];
   reason?: string;
+  markdown_detail?: string | null;
 }
 
 export interface RoadmapWeek {
@@ -192,6 +193,7 @@ export interface RoadmapApiResponse {
   forecast: ProgressForecast | null;
   achievements: AchievementProfile | null;
   decay_profile: DecayProfile | null;
+  from_cache?: boolean;
 }
 
 export interface CompareRolesApiResponse {
