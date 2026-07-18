@@ -20,8 +20,8 @@ RUN npm install
 RUN npm run build
 
 # Setup the backend
-WORKDIR /app
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app/backend
+RUN pip install --no-cache-dir -r ../requirements.txt
 
 # Collect static files for Django
 RUN python manage.py collectstatic --noinput
@@ -30,4 +30,4 @@ RUN python manage.py collectstatic --noinput
 EXPOSE 7860
 
 # Run the Django server using gunicorn
-CMD ["gunicorn", "icrs_backend.wsgi:application", "--bind", "0.0.0.0:7860"]
+CMD ["gunicorn", "icrs.wsgi:application", "--bind", "0.0.0.0:7860"]
