@@ -194,7 +194,6 @@ function App() {
 
           <SidebarInsights
             forecast={data.forecast}
-            achievements={data.achievements}
             decayProfile={data.decay_profile}
           />
         </aside>

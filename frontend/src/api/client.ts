@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { RoadmapApiResponse, CompareRolesApiResponse, InsightsApiResponse } from '../types';
+import type { RoadmapApiResponse, CompareRolesApiResponse } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : '');
 
@@ -34,11 +34,6 @@ export const api = {
       role_a: roleA,
       role_b: roleB,
     });
-    return response.data;
-  },
-
-  getInsights: async (muid: string): Promise<InsightsApiResponse> => {
-    const response = await apiClient.post<InsightsApiResponse>('/insights', { muid });
     return response.data;
   },
 };

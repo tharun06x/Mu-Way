@@ -194,15 +194,7 @@ def api_generate_roadmap(request):
     except Exception as exc:
         logger.warning(f"Forecast computation failed (non-fatal): {exc}")
 
-    # ── Achievement Profile ───────────────────────────────────────────────── #
-    achievements = None
-    try:
-        from core.services.achievements_service import compute_achievements
-        user_subs_achv = user_data[user_data['user_id'] == muid].copy() if not user_data.empty else pd.DataFrame()
-        achv_profile = compute_achievements(muid, user_subs_achv)
-        achievements = achv_profile.to_dict()
-    except Exception as exc:
-        logger.warning(f"Achievement computation failed (non-fatal): {exc}")
+
 
     # ── Serialize Response ────────────────────────────────────────────────── #
     gap_data = result.get("gap", {})
@@ -228,7 +220,6 @@ def api_generate_roadmap(request):
         "known_user":      result.get("known_user", False),
         "submitted_tasks": result.get("submitted_tasks", []),
         "forecast":        forecast,
-        "achievements":    achievements,
         "decay_profile":   decay_profile,
         "from_cache":      False,
     }
@@ -297,34 +288,3 @@ def api_compare_roles(request):
         return JsonResponse({"detail": "Internal error during role comparison."}, status=500)
 
 
-# ── Insights / Achievements Endpoint ─────────────────────────────────────── #
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_insights(request):
-    """
-    POST /insights
-    Body: { "muid": str }
-    Returns the user's achievement profile, streak, XP, and badges.
-    """
-    body, err = _parse_json_body(request)
-    if err:
-        return err
-
-    muid = str(body.get('muid', '')).strip()
-    if not muid:
-        return JsonResponse({"detail": "muid is required."}, status=400)
-
-    try:
-        user_data, _, _ = _ensure_data_loaded()
-    except Exception:
-        return JsonResponse({"detail": "Service unavailable."}, status=503)
-
-    try:
-        from core.services.achievements_service import compute_achievements
-        user_subs = user_data[user_data['user_id'] == muid].copy() if not user_data.empty else pd.DataFrame()
-        profile = compute_achievements(muid, user_subs)
-        return JsonResponse({"success": True, "achievements": profile.to_dict()})
-    except Exception:
-        logger.exception(f"Insights failed for muid={muid!r}")
-        return JsonResponse({"detail": "Internal error computing insights."}, status=500)

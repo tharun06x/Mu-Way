@@ -119,32 +119,6 @@ export interface ProgressForecast {
   adaptive_goal?: AdaptiveGoal;
 }
 
-// ── New: Achievements & Gamification ────────────────────────────────────── //
-
-export interface Badge {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  earned: boolean;
-  earned_date: string | null;
-}
-
-export interface AchievementProfile {
-  user_id: string;
-  xp: number;
-  level: number;
-  level_title: string;
-  xp_to_next_level: number;
-  current_streak_days: number;
-  longest_streak_days: number;
-  total_approved: number;
-  total_submitted: number;
-  active_days: number;
-  badges: Badge[];
-  next_milestone: string;
-}
-
 // ── New: Skill Decay ─────────────────────────────────────────────────────── //
 
 export interface DomainDecayInfo {
@@ -189,9 +163,7 @@ export interface RoadmapApiResponse {
   roadmap: Roadmap;
   known_user: boolean;
   submitted_tasks: SubmittedTask[];
-  // New fields from upgrade:
   forecast: ProgressForecast | null;
-  achievements: AchievementProfile | null;
   decay_profile: DecayProfile | null;
   from_cache?: boolean;
 }
@@ -201,7 +173,3 @@ export interface CompareRolesApiResponse {
   comparison: RoleComparisonResult;
 }
 
-export interface InsightsApiResponse {
-  success: boolean;
-  achievements: AchievementProfile;
-}
