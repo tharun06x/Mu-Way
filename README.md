@@ -1,13 +1,3 @@
----
-title: muWay — Intelligent Career Operating System
-emoji: 🚀
-colorFrom: purple
-colorTo: indigo
-sdk: docker
-pinned: false
-license: mit
-short_description: Personalised career roadmaps powered by ML on Mulearn data
----
 
 # 🚀 muWay — Intelligent Career Operating System
 
