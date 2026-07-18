@@ -19,7 +19,7 @@ function App() {
   const { activeMuid, activeRole, setSession, clearSession } = useAppStore();
   
   const [formMuid, setFormMuid] = useState(activeMuid || '');
-  const [formName, setFormName] = useState('');
+  const [formName] = useState('');
   const [formRole, setFormRole] = useState(activeRole || ROLES[3]); // Default to Full Stack
 
   // Fetch roadmap data using TanStack Query
@@ -147,7 +147,6 @@ function App() {
             forecast={data.forecast} 
             achievements={data.achievements} 
             decayProfile={data.decay_profile} 
-            gapData={data.gap} 
           />
         </aside>
 

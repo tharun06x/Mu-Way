@@ -43,6 +43,7 @@ export interface RoadmapTask {
   score: number;
   is_bridge?: boolean;
   resources?: TaskResource[];  // Enriched learning links
+  reason?: string;
 }
 
 export interface RoadmapWeek {

@@ -1,14 +1,15 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Lock, Star, ChevronRight, BookOpen, BrainCircuit, Code2, Database } from 'lucide-react';
-import type { RoadmapWeek, RoadmapTask } from '../../types';
+import type { Variants } from 'framer-motion';
+import { CheckCircle2, Lock, Star, ChevronRight, BrainCircuit } from 'lucide-react';
+import type { RoadmapWeek } from '../../types';
 
 interface SkillArchipelagoProps {
   weeks: RoadmapWeek[];
   dreamRole: string;
 }
 
-const container = {
+const container: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -16,7 +17,7 @@ const container = {
   }
 };
 
-const item = {
+const item: Variants = {
   hidden: { opacity: 0, y: 20 },
   show: { opacity: 1, y: 0, transition: { type: 'spring', damping: 20, stiffness: 100 } }
 };

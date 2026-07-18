@@ -1,16 +1,15 @@
 import React from 'react';
-import { Target, Trophy, TrendingUp, ShieldAlert, Zap, Compass } from 'lucide-react';
-import type { ProgressForecast, AchievementProfile, DecayProfile, GapData } from '../../types';
+import { Target, Trophy, TrendingUp, ShieldAlert, Zap } from 'lucide-react';
+import type { ProgressForecast, AchievementProfile, DecayProfile } from '../../types';
 
 interface SidebarInsightsProps {
   forecast: ProgressForecast | null;
   achievements: AchievementProfile | null;
   decayProfile: DecayProfile | null;
-  gapData: GapData | null;
 }
 
 export const SidebarInsights: React.FC<SidebarInsightsProps> = ({ 
-  forecast, achievements, decayProfile, gapData 
+  forecast, achievements, decayProfile
 }) => {
   return (
     <div className="flex flex-col gap-6">
